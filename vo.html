@@ -2,6 +2,9 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Ming Xin Construction — VO Request Form 客户加项申请表</title>
 <style>
@@ -88,6 +91,15 @@
   .overlay{ display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:100; align-items:flex-start; justify-content:center; overflow:auto; padding:30px 10px; }
   .overlay.active{ display:flex; }
   .preview-sheet{ background:#fff; width:800px; max-width:100%; padding:36px; border-radius:6px; }
+  .modal-sheet{ background:#fff; width:600px; max-width:100%; padding:26px 30px; border-radius:10px; }
+  .field-grid.two{ grid-template-columns:repeat(2, 1fr); }
+  .field.full{ grid-column:1 / -1; }
+  .upload-badge{ display:inline-block; background:#FFF3CD; color:#856404; font-size:10px; font-weight:600; padding:2px 8px; border-radius:10px; margin-left:6px; white-space:nowrap; }
+  .archive-search{ width:100%; border:1px solid var(--border); border-radius:6px; padding:9px 12px; font-size:13px; margin-bottom:14px; }
+  .archive-table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+  .archive-table th{ background:var(--navy); color:#fff; text-align:left; padding:8px 10px; font-size:11.5px; }
+  .archive-table td{ padding:8px 10px; border-bottom:1px solid var(--border); vertical-align:top; }
+  .archive-empty{ text-align:center; color:var(--muted); padding:30px 10px; font-size:13px; }
   .preview-toolbar{ position:sticky; top:0; background:#fff; padding:10px 0; display:flex; justify-content:flex-end; gap:10px; margin-bottom:10px; }
 
   .vo-doc-header{ display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px; }
@@ -133,6 +145,10 @@
       <div class="title">VO Request Form 客户加项申请表</div>
       <div class="sub">Site capture only · 现场记录客户需求，报价另行处理</div>
     </div>
+  </div>
+  <div class="header-right" style="display:flex;align-items:center;gap:10px;margin-left:auto">
+    <button class="btn btn-outline" onclick="openVoArchive()">📁 Saved VO Records 已保存VO記錄</button>
+    <button class="btn btn-outline" onclick="openVoUploadModal()">⬆️ Upload Old VO 上傳舊VO單</button>
   </div>
 </header>
 
@@ -255,6 +271,71 @@
   </div>
 </div>
 
+<!-- VO Archive Overlay (across all projects) -->
+<div class="overlay" id="vo-archive-overlay" onclick="handleVoArchiveOverlayClick(event)">
+  <div class="preview-sheet" style="width:820px">
+    <h3 style="margin:0 0 12px;color:var(--navy);font-size:17px">📁 Saved VO Records 已保存VO記錄</h3>
+    <div class="preview-toolbar" style="margin-bottom:6px">
+      <button class="btn btn-grey" onclick="closeVoArchive()">✕ Close 关闭</button>
+    </div>
+    <input type="text" class="archive-search" id="vo-archive-search" placeholder="Search by VO No., Project Ref, or Client Name… 按VO編號、項目編號或客戶名稱搜索" oninput="renderVoArchiveList()">
+    <table class="archive-table">
+      <thead>
+        <tr>
+          <th>Project 項目</th>
+          <th>VO No. 編號</th>
+          <th>Date 日期</th>
+          <th>Description 說明</th>
+          <th style="text-align:right">Amount (RM)</th>
+          <th style="width:170px">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="vo-archive-body"></tbody>
+    </table>
+    <div id="vo-archive-empty-state" class="archive-empty" style="display:none"></div>
+  </div>
+</div>
+
+<!-- Upload Old VO Modal -->
+<div class="overlay" id="vo-upload-overlay" onclick="handleVoUploadOverlayClick(event)">
+  <div class="modal-sheet">
+    <h3 style="margin:0 0 4px;color:var(--navy);font-size:17px">⬆️ Upload Old VO 上傳舊VO單</h3>
+    <p style="margin:0 0 16px;font-size:12px;color:var(--muted)">上傳過去已簽發的 VO 單據（PDF 或圖片），不需要重新輸入項目明細。會保存在對應項目底下，Schedule 頁面也能查看。</p>
+    <div class="field-grid two">
+      <div class="field full">
+        <label>Belongs to Project 所屬項目 *</label>
+        <select id="vo-up-project"></select>
+        <div id="vo-up-project-info" style="font-size:11px;color:var(--muted);margin-top:4px"></div>
+      </div>
+      <div class="field full">
+        <label>VO File (PDF / Image) VO檔案 *</label>
+        <input type="file" id="vo-up-file" accept=".pdf,image/*" onchange="handleVoUploadFileChange()">
+        <div id="vo-up-file-info" style="font-size:11px;color:var(--muted);margin-top:4px"></div>
+      </div>
+      <div class="field">
+        <label>VO No. 編號 *</label>
+        <input id="vo-up-ref" placeholder="e.g. VO-2025-003">
+      </div>
+      <div class="field">
+        <label>Date 日期</label>
+        <input type="date" id="vo-up-date">
+      </div>
+      <div class="field full">
+        <label>Description 說明</label>
+        <input id="vo-up-desc" placeholder="e.g. Additional waterproofing works">
+      </div>
+      <div class="field">
+        <label>Amount (RM) 金額</label>
+        <input type="number" id="vo-up-amount" min="0" step="0.01" placeholder="0.00">
+      </div>
+    </div>
+    <div class="add-bar" style="justify-content:flex-end;margin-top:16px">
+      <button class="btn btn-grey" onclick="closeVoUploadModal()">Cancel 取消</button>
+      <button class="btn btn-red" id="vo-up-save-btn" onclick="saveUploadedVoFromVoPage()">💾 Save 保存</button>
+    </div>
+  </div>
+</div>
+
 <script>
 let items = [];
 let rowSeq = 1;
@@ -309,6 +390,215 @@ function renderRows(){
 }
 
 function fmtDate(s){ if(!s) return '—'; const d = new Date(s); return d.toLocaleDateString('en-GB', {day:'2-digit', month:'short', year:'numeric'}); }
+
+function fmt(n){ return Number(n||0).toLocaleString('en-MY', { minimumFractionDigits:2, maximumFractionDigits:2 }); }
+
+/* ===================== VO ARCHIVE + UPLOAD (shared with schedule.html's per-project VO Records) ===================== */
+function loadAllProjectSchedules(){
+  try { return JSON.parse(localStorage.getItem('gal_project_schedules') || '{}'); } catch(e){ return {}; }
+}
+function saveAllProjectSchedules(all){
+  try { localStorage.setItem('gal_project_schedules', JSON.stringify(all)); return true; }
+  catch(e){ return false; }
+}
+
+/* ---------- Archive (browse VOs across all projects) ---------- */
+function openVoArchive(){
+  document.getElementById('vo-archive-search').value = '';
+  renderVoArchiveList();
+  document.getElementById('vo-archive-overlay').classList.add('active');
+}
+function closeVoArchive(){
+  document.getElementById('vo-archive-overlay').classList.remove('active');
+}
+function handleVoArchiveOverlayClick(e){
+  if (e.target === document.getElementById('vo-archive-overlay')) closeVoArchive();
+}
+
+function renderVoArchiveList(){
+  const all = loadAllProjectSchedules();
+  const flat = [];
+  Object.values(all).forEach(project => {
+    (project.voRecords || []).forEach(v => {
+      flat.push({ projectRef: project.ref, projectClient: project.client, ...v });
+    });
+  });
+  flat.sort((a,b) => new Date(b.date||0) - new Date(a.date||0));
+
+  const q = (document.getElementById('vo-archive-search').value || '').trim().toLowerCase();
+  const filtered = q ? flat.filter(v =>
+    (v.ref||'').toLowerCase().includes(q) ||
+    (v.projectRef||'').toLowerCase().includes(q) ||
+    (v.projectClient||'').toLowerCase().includes(q)
+  ) : flat;
+
+  const body = document.getElementById('vo-archive-body');
+  const emptyState = document.getElementById('vo-archive-empty-state');
+
+  if (flat.length === 0){
+    body.innerHTML = '';
+    emptyState.style.display = 'block';
+    emptyState.innerHTML = '還沒有任何VO記錄 / No VO records yet.<br>可以點擊「⬆️ Upload Old VO」上傳舊VO單，或前往 Schedule 頁面的項目內新增。';
+    return;
+  }
+  if (filtered.length === 0){
+    body.innerHTML = '';
+    emptyState.style.display = 'block';
+    emptyState.innerHTML = '找不到符合的VO記錄 / No matching VO records found.';
+    return;
+  }
+  emptyState.style.display = 'none';
+  body.innerHTML = filtered.map(v => `
+    <tr>
+      <td><b>${v.projectRef}</b>${v.projectClient ? '<br><span style="color:var(--muted);font-size:11px">' + v.projectClient + '</span>' : ''}</td>
+      <td>${v.ref}</td>
+      <td>${fmtDate(v.date)}</td>
+      <td>${v.desc || '—'}</td>
+      <td style="text-align:right">${v.amount ? fmt(v.amount) : '—'}</td>
+      <td>
+        <button class="btn btn-outline btn-sm" onclick="viewArchivedVoFile('${v.projectRef.replace(/'/g,"\\'")}','${v.id}')">📄 View 查看</button>
+        <button class="btn btn-outline btn-sm" onclick="deleteArchivedVo('${v.projectRef.replace(/'/g,"\\'")}','${v.id}')" style="color:var(--red);border-color:var(--red)">🗑</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function viewArchivedVoFile(projectRef, voId){
+  const all = loadAllProjectSchedules();
+  const project = all[projectRef];
+  const v = project && (project.voRecords || []).find(x => x.id === voId);
+  if (!v || !v.fileData){ alert('File not found. 找不到檔案。'); return; }
+  const w = window.open();
+  if (!w){
+    alert('Pop-up was blocked! Please allow pop-ups to view the file.\n彈出視窗被阻止，請允許彈出視窗以查看檔案。');
+    return;
+  }
+  const safeTitle = (v.ref || 'VO').replace(/</g,'&lt;');
+  if ((v.fileType || '').indexOf('pdf') !== -1 || (v.fileName||'').toLowerCase().endsWith('.pdf')){
+    w.document.write('<!DOCTYPE html><html><head><title>' + safeTitle + '</title></head><body style="margin:0"><iframe src="' + v.fileData + '" style="width:100%;height:100vh;border:none"></iframe></body></html>');
+  } else {
+    w.document.write('<!DOCTYPE html><html><head><title>' + safeTitle + '</title></head><body style="margin:0;background:#222;display:flex;align-items:center;justify-content:center;min-height:100vh"><img src="' + v.fileData + '" style="max-width:100%;max-height:100vh"></body></html>');
+  }
+  w.document.close();
+}
+
+function deleteArchivedVo(projectRef, voId){
+  if (!confirm('Delete this VO record? This cannot be undone.\n確定要刪除此VO記錄嗎？此操作無法撤銷。')) return;
+  const all = loadAllProjectSchedules();
+  const project = all[projectRef];
+  if (!project) return;
+  project.voRecords = (project.voRecords || []).filter(x => x.id !== voId);
+  saveAllProjectSchedules(all);
+  renderVoArchiveList();
+}
+
+/* ---------- Upload old VO (attach to a chosen project) ---------- */
+let uploadedVoFileDataFromVoPage = null;
+
+function openVoUploadModal(){
+  const all = loadAllProjectSchedules();
+  const refs = Object.keys(all);
+  const sel = document.getElementById('vo-up-project');
+
+  if (refs.length === 0){
+    sel.innerHTML = '<option value="">— No projects yet —</option>';
+    document.getElementById('vo-up-project-info').innerHTML =
+      '<span style="color:var(--red)">還沒有任何項目 / No projects yet. 請先到 <a href="schedule.html" target="_blank">Schedule 頁面</a> 建立一個項目。</span>';
+  } else {
+    sel.innerHTML = '<option value="">Select a project… 選擇項目</option>' +
+      refs.map(ref => {
+        const p = all[ref];
+        return `<option value="${ref}">${ref}${p.client ? ' — ' + p.client : ''}</option>`;
+      }).join('');
+    document.getElementById('vo-up-project-info').textContent = '';
+  }
+
+  document.getElementById('vo-up-file').value = '';
+  document.getElementById('vo-up-file-info').textContent = '';
+  document.getElementById('vo-up-ref').value = '';
+  document.getElementById('vo-up-date').value = '';
+  document.getElementById('vo-up-desc').value = '';
+  document.getElementById('vo-up-amount').value = '';
+  uploadedVoFileDataFromVoPage = null;
+  document.getElementById('vo-upload-overlay').classList.add('active');
+}
+
+function closeVoUploadModal(){
+  document.getElementById('vo-upload-overlay').classList.remove('active');
+}
+function handleVoUploadOverlayClick(e){
+  if (e.target === document.getElementById('vo-upload-overlay')) closeVoUploadModal();
+}
+
+function handleVoUploadFileChange(){
+  const fileInput = document.getElementById('vo-up-file');
+  const infoEl = document.getElementById('vo-up-file-info');
+  const file = fileInput.files[0];
+  if (!file) { uploadedVoFileDataFromVoPage = null; infoEl.textContent = ''; return; }
+
+  const maxSizeBytes = 3 * 1024 * 1024;
+  if (file.size > maxSizeBytes){
+    infoEl.innerHTML = '<span style="color:var(--red)">⚠ File is ' + (file.size/1024/1024).toFixed(1) + 'MB — please keep under 3MB, device storage is limited.<br>檔案過大，請壓縮後再上傳（建議小於 3MB）。</span>';
+    fileInput.value = '';
+    uploadedVoFileDataFromVoPage = null;
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = function(e){
+    uploadedVoFileDataFromVoPage = { name: file.name, type: file.type, dataUrl: e.target.result, size: file.size };
+    infoEl.innerHTML = '<span style="color:#1a7d3a">✓ ' + file.name + ' (' + (file.size/1024).toFixed(0) + ' KB)</span>';
+  };
+  reader.onerror = function(){
+    infoEl.innerHTML = '<span style="color:var(--red)">Could not read file. 讀取檔案失敗。</span>';
+    uploadedVoFileDataFromVoPage = null;
+  };
+  reader.readAsDataURL(file);
+}
+
+function saveUploadedVoFromVoPage(){
+  const projectRef = document.getElementById('vo-up-project').value;
+  if (!projectRef){
+    alert('Please select which project this VO belongs to.\n請選擇此VO所屬的項目。');
+    return;
+  }
+  const ref = document.getElementById('vo-up-ref').value.trim();
+  if (!ref){
+    alert('Please enter a VO No.\n請填寫VO編號。');
+    document.getElementById('vo-up-ref').focus();
+    return;
+  }
+  if (!uploadedVoFileDataFromVoPage){
+    alert('Please choose a file to upload.\n請選擇要上傳的檔案。');
+    return;
+  }
+  const date = document.getElementById('vo-up-date').value;
+  const desc = document.getElementById('vo-up-desc').value.trim();
+  const amount = parseFloat(document.getElementById('vo-up-amount').value) || 0;
+
+  const all = loadAllProjectSchedules();
+  const project = all[projectRef];
+  if (!project){ alert('Project not found. 找不到此項目。'); return; }
+
+  if (!project.voRecords) project.voRecords = [];
+  project.voRecords.push({
+    id: 'vo_' + Date.now() + '_' + Math.round(Math.random()*1000),
+    ref, date, desc, amount,
+    fileName: uploadedVoFileDataFromVoPage.name,
+    fileType: uploadedVoFileDataFromVoPage.type,
+    fileData: uploadedVoFileDataFromVoPage.dataUrl,
+    uploadedAt: new Date().toISOString()
+  });
+
+  if (!saveAllProjectSchedules(all)){
+    alert('Could not save — device storage may be full. Try a smaller file, or delete some old records first.\n保存失敗，本機存儲空間可能已滿。');
+    project.voRecords.pop();
+    return;
+  }
+
+  closeVoUploadModal();
+  openVoArchive();
+}
 
 function clearAll(){
   if (!confirm('Clear all items and reset the form? 确定要清空所有数据吗？')) return;

@@ -2,6 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Ming Xin Construction — Quotation Builder 報價系統</title>
 <style>
@@ -153,6 +156,26 @@
   .preview-toolbar .toolbar-btns { display: flex; gap: 8px; }
   .preview-content { padding: 32px 36px; }
 
+  /* ── Quotation Archive ── */
+  .archive-modal { background: #fff; max-width: 960px; margin: 0 auto; border-radius: 12px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.25); }
+  .archive-body { padding: 20px 24px 28px; max-height: 72vh; overflow-y: auto; }
+  .archive-search { width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; margin-bottom: 14px; }
+  .archive-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .archive-table th { text-align: left; background: var(--grey); color: var(--navy); font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; padding: 9px 10px; border-bottom: 2px solid var(--border); }
+  .archive-table td { padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  .archive-table tr:hover td { background: #F7F9FC; }
+  .archive-actions { display: flex; gap: 6px; white-space: nowrap; }
+  .archive-actions button { border: none; border-radius: 6px; padding: 5px 9px; font-size: 11.5px; cursor: pointer; font-weight: 600; }
+  .archive-view-btn { background: var(--lightblue); color: var(--navy); }
+  .archive-edit-btn { background: #FDF0DA; color: #8A5A00; }
+  .archive-del-btn { background: #FBE4E1; color: var(--red); }
+  .archive-empty { text-align: center; color: var(--muted); padding: 40px 10px; font-size: 13px; }
+  .upload-modal-sheet { background: #fff; width: 560px; max-width: 100%; padding: 26px 30px; border-radius: 10px; margin: 0 auto; }
+  .upload-badge { display:inline-block; background:#FFF3CD; color:#856404; font-size:10px; font-weight:600; padding:2px 8px; border-radius:10px; margin-left:6px; white-space:nowrap; }
+  .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .field-grid.two { grid-template-columns: repeat(2, 1fr); }
+  .field-grid .field.full { grid-column: 1 / -1; }
+
   /* ── Preview document ── */
   .doc-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
   .doc-logo-text .company { font-size: 17px; font-weight: 700; color: var(--navy); }
@@ -215,6 +238,8 @@
     </div>
   </div>
   <div class="header-right">
+    <button class="btn" style="background:#fff;color:#1F3A5F;border:1.5px solid #1F3A5F" onclick="openUploadModal()">⬆️ Upload Old Quotation 上傳舊報價單</button>
+    <button class="btn" style="background:#fff;color:#1F3A5F;border:1.5px solid #1F3A5F" onclick="openArchive()">📁 Saved Quotations 已保存報價單</button>
     <button class="btn" style="background:#fff;color:#1F3A5F;border:1.5px solid #1F3A5F" onclick="saveToSchedule()">💾 Save to Schedule 保存至進度表</button>
     <button class="btn btn-red" onclick="showPreview()">▶ Preview &amp; Print 預覽打印</button>
   </div>
@@ -341,6 +366,73 @@
       </div>
     </div>
     <div class="preview-content" id="preview-content"></div>
+  </div>
+</div>
+
+<!-- Saved Quotations Archive overlay -->
+<div class="overlay" id="archive-overlay" onclick="handleArchiveOverlayClick(event)">
+  <div class="archive-modal">
+    <div class="preview-toolbar">
+      <span>📁 Saved Quotations 已保存報價單</span>
+      <div class="toolbar-btns">
+        <button class="btn btn-grey" onclick="closeArchive()">✕ Close 关闭</button>
+      </div>
+    </div>
+    <div class="archive-body">
+      <input type="text" class="archive-search" id="archive-search" placeholder="Search by Ref No. or Client Name… 按報價編號或客戶名稱搜索" oninput="renderArchiveList()">
+      <table class="archive-table">
+        <thead>
+          <tr>
+            <th>Ref No. 報價編號</th>
+            <th>Client 客戶</th>
+            <th>Date 日期</th>
+            <th style="text-align:right">Total (RM)</th>
+            <th style="width:200px">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="archive-list-body"></tbody>
+      </table>
+      <div id="archive-empty-state" class="archive-empty" style="display:none">還沒有保存任何報價單 / No saved quotations yet.<br>填好報價單後點擊「Save to Schedule」即可保存至此。</div>
+    </div>
+  </div>
+</div>
+
+<!-- Upload Old Quotation Modal -->
+<div class="overlay" id="upload-modal-overlay" onclick="handleUploadModalOverlayClick(event)">
+  <div class="upload-modal-sheet">
+    <h3 style="margin:0 0 4px;color:var(--navy);font-size:17px">⬆️ Upload Old Quotation 上傳舊報價單</h3>
+    <p style="margin:0 0 16px;font-size:12px;color:var(--muted)">直接上傳舊報價單的 PDF 或圖片檔案，不需要重新輸入項目明細。財務或 Supervisor 之後可在「Saved Quotations」中查看原始檔案。</p>
+    <div class="field-grid two">
+      <div class="field full">
+        <label>Quotation File (PDF / Image) 報價單檔案 *</label>
+        <input type="file" id="up-file" accept=".pdf,image/*" onchange="handleUploadFileChange()">
+        <div id="up-file-info" style="font-size:11px;color:var(--muted);margin-top:4px"></div>
+      </div>
+      <div class="field">
+        <label>Project Ref / ID 項目編號 *</label>
+        <input id="up-ref" placeholder="e.g. QUO-2025-014">
+      </div>
+      <div class="field">
+        <label>Date 日期</label>
+        <input type="date" id="up-date">
+      </div>
+      <div class="field full">
+        <label>Client Name 客戶姓名</label>
+        <input id="up-client" placeholder="e.g. Mr Tan Wei Ming">
+      </div>
+      <div class="field full">
+        <label>Site Address / Subject 工地地址或事由</label>
+        <input id="up-subject" placeholder="e.g. 8-1 Jalan Kasuarina 6 — Renovation Works">
+      </div>
+      <div class="field">
+        <label>Total Amount (RM) 總金額</label>
+        <input type="number" id="up-total" min="0" step="0.01" placeholder="0.00">
+      </div>
+    </div>
+    <div class="add-bar" style="justify-content:flex-end;margin-top:16px">
+      <button class="btn btn-grey" onclick="closeUploadModal()">Cancel 取消</button>
+      <button class="btn btn-red" id="up-save-btn" onclick="saveUploadedQuotation()">💾 Save 保存</button>
+    </div>
   </div>
 </div>
 
@@ -742,6 +834,227 @@ function clearAll() {
   document.getElementById('f-date').value = new Date().toISOString().slice(0,10);
   setType('residential');
   renderRows();
+}
+
+/* ===================== SAVED QUOTATIONS ARCHIVE ===================== */
+function loadSavedQuotationsArchive(){
+  try { return JSON.parse(localStorage.getItem('gal_saved_quotations') || '[]'); } catch(e){ return []; }
+}
+
+function openArchive(){
+  document.getElementById('archive-search').value = '';
+  renderArchiveList();
+  document.getElementById('archive-overlay').classList.add('active');
+}
+
+function closeArchive(){
+  document.getElementById('archive-overlay').classList.remove('active');
+}
+
+function handleArchiveOverlayClick(e){
+  if (e.target === document.getElementById('archive-overlay')) closeArchive();
+}
+
+function fmtArchiveDate(s){
+  if (!s) return '—';
+  const d = new Date(s + 'T00:00:00');
+  if (isNaN(d.getTime())) return s;
+  return d.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+}
+
+function renderArchiveList(){
+  const list = loadSavedQuotationsArchive().slice().sort((a,b) => new Date(b.savedAt||0) - new Date(a.savedAt||0));
+  const searchEl = document.getElementById('archive-search');
+  const q = (searchEl ? searchEl.value : '').trim().toLowerCase();
+  const filtered = q ? list.filter(item =>
+    (item.ref||'').toLowerCase().includes(q) || (item.client||'').toLowerCase().includes(q)
+  ) : list;
+
+  const body = document.getElementById('archive-list-body');
+  const emptyState = document.getElementById('archive-empty-state');
+
+  if (list.length === 0){
+    body.innerHTML = '';
+    emptyState.style.display = 'block';
+    emptyState.innerHTML = '還沒有保存任何報價單 / No saved quotations yet.<br>填好報價單後點擊「Save to Schedule」即可保存至此。';
+    return;
+  }
+  if (filtered.length === 0){
+    body.innerHTML = '';
+    emptyState.style.display = 'block';
+    emptyState.innerHTML = '找不到符合的報價單 / No matching quotations found.';
+    return;
+  }
+  emptyState.style.display = 'none';
+  body.innerHTML = filtered.map(item => {
+    const safeRef = item.ref.replace(/'/g,"\\'");
+    const actionBtn = item.isUploaded
+      ? `<button class="btn btn-outline btn-sm" onclick="viewUploadedFile('${safeRef}')">📄 View File 查看檔案</button>`
+      : `<button class="btn btn-outline btn-sm" onclick="loadArchivedQuotation('${safeRef}')">📂 Load 加載</button>`;
+    return `
+    <tr>
+      <td><b>${item.ref}</b>${item.isUploaded ? ' <span class="upload-badge">📎 Uploaded 上傳檔案</span>' : ''}</td>
+      <td>${item.client || '—'}</td>
+      <td>${fmtArchiveDate(item.date)}</td>
+      <td style="text-align:right">RM ${fmt(item.grandTotal)}</td>
+      <td>
+        ${actionBtn}
+        <button class="btn btn-outline btn-sm" onclick="deleteArchivedQuotation('${safeRef}')" style="color:var(--red);border-color:var(--red)">🗑 Delete</button>
+      </td>
+    </tr>
+  `;
+  }).join('');
+}
+
+function loadArchivedQuotation(ref){
+  const list = loadSavedQuotationsArchive();
+  const item = list.find(q => q.ref === ref);
+  if (!item) { alert('Quotation not found. 找不到此報價單。'); return; }
+
+  if (rows.length > 0 && !confirm('Loading this quotation will replace your current unsaved work below. Continue?\n加載此報價單將取代目前下方未保存的內容，確定繼續？')) return;
+
+  document.getElementById('f-ref').value = item.ref || '';
+  document.getElementById('f-date').value = item.date || '';
+  document.getElementById('f-client').value = item.client || '';
+  document.getElementById('f-addr').value = item.address || '';
+  document.getElementById('f-subj').value = item.subject || '';
+  setType(item.qType || 'residential');
+
+  rows = (item.items || []).map(it => ({
+    id: Date.now() + Math.random(),
+    code: 'CUSTOM',
+    en: it.desc || '',
+    zh: '',
+    unit: it.unit || 'lot',
+    rate: it.rate || 0,
+    qty: it.qty || 0,
+    custom: true
+  }));
+  renderRows();
+  closeArchive();
+}
+
+function deleteArchivedQuotation(ref){
+  if (!confirm('Delete quotation "' + ref + '"? This cannot be undone.\n確定要刪除報價單 "' + ref + '" 嗎？此操作無法撤銷。')) return;
+  let list = loadSavedQuotationsArchive();
+  list = list.filter(q => q.ref !== ref);
+  try { localStorage.setItem('gal_saved_quotations', JSON.stringify(list)); } catch(e){}
+  renderArchiveList();
+}
+
+/* ===================== UPLOAD OLD QUOTATION ===================== */
+let uploadedFileData = null; // { name, type, dataUrl, size }
+
+function openUploadModal(){
+  document.getElementById('up-file').value = '';
+  document.getElementById('up-file-info').textContent = '';
+  document.getElementById('up-ref').value = '';
+  document.getElementById('up-date').value = '';
+  document.getElementById('up-client').value = '';
+  document.getElementById('up-subject').value = '';
+  document.getElementById('up-total').value = '';
+  uploadedFileData = null;
+  document.getElementById('upload-modal-overlay').classList.add('active');
+}
+
+function closeUploadModal(){
+  document.getElementById('upload-modal-overlay').classList.remove('active');
+}
+
+function handleUploadModalOverlayClick(e){
+  if (e.target === document.getElementById('upload-modal-overlay')) closeUploadModal();
+}
+
+function handleUploadFileChange(){
+  const fileInput = document.getElementById('up-file');
+  const infoEl = document.getElementById('up-file-info');
+  const file = fileInput.files[0];
+  if (!file) { uploadedFileData = null; infoEl.textContent = ''; return; }
+
+  const maxSizeBytes = 3 * 1024 * 1024; // soft cap — total localStorage is usually only ~5-10MB
+  if (file.size > maxSizeBytes){
+    infoEl.innerHTML = '<span style="color:var(--red)">⚠ File is ' + (file.size/1024/1024).toFixed(1) + 'MB — please keep under 3MB, device storage is limited. Try compressing the PDF/image first.<br>檔案過大，請壓縮後再上傳（建議小於 3MB）。</span>';
+    fileInput.value = '';
+    uploadedFileData = null;
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = function(e){
+    uploadedFileData = { name: file.name, type: file.type, dataUrl: e.target.result, size: file.size };
+    infoEl.innerHTML = '<span style="color:#1a7d3a">✓ ' + file.name + ' (' + (file.size/1024).toFixed(0) + ' KB)</span>';
+  };
+  reader.onerror = function(){
+    infoEl.innerHTML = '<span style="color:var(--red)">Could not read file. 讀取檔案失敗。</span>';
+    uploadedFileData = null;
+  };
+  reader.readAsDataURL(file);
+}
+
+function saveUploadedQuotation(){
+  const ref = document.getElementById('up-ref').value.trim();
+  if (!ref){
+    alert('Please enter a Project Ref / ID.\n請填寫項目編號。');
+    document.getElementById('up-ref').focus();
+    return;
+  }
+  if (!uploadedFileData){
+    alert('Please choose a file to upload.\n請選擇要上傳的檔案。');
+    return;
+  }
+
+  const client = document.getElementById('up-client').value.trim();
+  const date = document.getElementById('up-date').value;
+  const subject = document.getElementById('up-subject').value.trim();
+  const total = parseFloat(document.getElementById('up-total').value) || 0;
+
+  let saved = [];
+  try { saved = JSON.parse(localStorage.getItem('gal_saved_quotations') || '[]'); } catch(e) { saved = []; }
+
+  if (saved.some(p => p.ref === ref)){
+    if (!confirm('A quotation with Ref "' + ref + '" already exists. Overwrite it?\n此編號的報價單已存在，確定要覆蓋嗎？')) return;
+  }
+  saved = saved.filter(p => p.ref !== ref);
+
+  saved.push({
+    ref, client, address: subject, subject, date,
+    qType: 'residential',
+    items: [],
+    grandTotal: total,
+    savedAt: new Date().toISOString(),
+    isUploaded: true,
+    fileName: uploadedFileData.name,
+    fileType: uploadedFileData.type,
+    fileData: uploadedFileData.dataUrl
+  });
+
+  try {
+    localStorage.setItem('gal_saved_quotations', JSON.stringify(saved));
+  } catch(e) {
+    alert('Could not save — device storage may be full. Try a smaller file, or delete some old saved quotations first.\n保存失敗，本機存儲空間可能已滿。請嘗試更小的檔案，或先刪除一些舊的報價單記錄。');
+    return;
+  }
+
+  closeUploadModal();
+  openArchive();
+}
+
+function viewUploadedFile(ref){
+  const saved = loadSavedQuotationsArchive();
+  const item = saved.find(q => q.ref === ref);
+  if (!item || !item.fileData){ alert('File not found. 找不到檔案。'); return; }
+  const w = window.open();
+  if (!w){
+    alert('Pop-up was blocked! Please allow pop-ups to view the file.\n彈出視窗被阻止，請允許彈出視窗以查看檔案。');
+    return;
+  }
+  const safeTitle = (item.ref || 'Quotation').replace(/</g,'&lt;');
+  if ((item.fileType || '').indexOf('pdf') !== -1 || (item.fileName||'').toLowerCase().endsWith('.pdf')){
+    w.document.write('<!DOCTYPE html><html><head><title>' + safeTitle + '</title></head><body style="margin:0"><iframe src="' + item.fileData + '" style="width:100%;height:100vh;border:none"></iframe></body></html>');
+  } else {
+    w.document.write('<!DOCTYPE html><html><head><title>' + safeTitle + '</title></head><body style="margin:0;background:#222;display:flex;align-items:center;justify-content:center;min-height:100vh"><img src="' + item.fileData + '" style="max-width:100%;max-height:100vh"></body></html>');
+  }
+  w.document.close();
 }
 
 /* ── LOGO stored as JS variable to avoid template-literal conflicts ── */

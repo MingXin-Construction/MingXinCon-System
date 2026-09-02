@@ -2,6 +2,9 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Ming Xin Construction — Project Schedule 工程進度表</title>
 <style>
@@ -63,6 +66,12 @@
 
   .field-grid{ display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; }
   .field-grid.three{ grid-template-columns:repeat(3, 1fr); }
+  .field-grid.two{ grid-template-columns:repeat(2, 1fr); }
+  .field.full{ grid-column:1 / -1; }
+  .modal-sheet{ background:#fff; width:560px; max-width:100%; padding:26px 30px; border-radius:10px; }
+  .project-summary-bar{ display:flex; justify-content:space-between; align-items:center; gap:12px; background:#EEF2F8; border:1px solid var(--border); border-radius:8px; padding:12px 16px; margin-bottom:16px; flex-wrap:wrap; }
+  .project-summary-bar .ps-ref{ font-weight:700; color:var(--navy); font-size:14px; }
+  .project-summary-bar .ps-sub{ font-size:12px; color:var(--muted); margin-top:2px; }
   .field label{ display:block; font-size:11px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:5px; }
   .field input, .field select, .field textarea{ width:100%; border:1px solid var(--border); border-radius:6px; padding:8px 10px; font-size:13px; color:var(--text); background:#fff; font-family:inherit; }
 
@@ -114,6 +123,8 @@
   .mat-editor td{ padding:4px 6px; border:none; }
   .mat-editor td input{ width:100%; border:1px solid var(--border); border-radius:5px; padding:5px 7px; font-size:12px; }
   .mat-del{ background:none; border:none; color:var(--red); cursor:pointer; font-size:14px; }
+  .btn-icon-del{ background:none; border:none; color:var(--red); cursor:pointer; font-size:15px; padding:4px; }
+  .btn-icon-del:hover{ opacity:0.7; }
 
   .soon-task-block{ border:1px solid var(--border); border-radius:8px; padding:10px 12px; margin-bottom:10px; }
   .soon-task-block .stb-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:5px; flex-wrap:wrap; gap:6px; }
@@ -181,12 +192,13 @@
 
   <div class="card">
     <div class="card-header">
-      <div class="left"><span class="step-badge">1</span> Import Quotation 導入報價單</div>
+      <div class="left"><span class="step-badge">1</span> Import Quotation or Start New Project 導入報價單 / 新增項目</div>
+      <button class="btn btn-navy btn-sm" onclick="openProjectModal('new')" style="margin-left:auto">+ New Project 新增項目</button>
     </div>
     <div class="card-body">
       <div class="field-grid three">
         <div class="field">
-          <label>Saved Quotation 已保存的報價單</label>
+          <label>Saved Quotation / Project 已保存的報價單 / 項目</label>
           <select id="quotation-select" onchange="loadSelectedProject()"></select>
         </div>
         <div class="field">
@@ -207,10 +219,21 @@
 
   <div id="no-project-state" class="empty-state">
     <p>尚未選擇工程 / No project selected</p>
-    <p style="font-size:12px">請先在上方選擇一份已保存的報價單，或前往 <a href="index.html">Quotation</a> 頁面建立並保存一份新報價單。</p>
+    <p style="font-size:12px">點擊上方「+ New Project 新增項目」直接建立一個新項目，或前往 <a href="index.html">Quotation</a> 頁面建立並保存一份新報價單後在此選擇。</p>
   </div>
 
   <div id="project-content" style="display:none">
+
+    <div class="project-summary-bar">
+      <div>
+        <div class="ps-ref" id="ps-ref"></div>
+        <div class="ps-sub" id="ps-sub"></div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-outline btn-sm" onclick="openProjectModal('edit')">✏️ Edit Project Info 編輯項目資料</button>
+        <button class="btn btn-outline btn-sm" onclick="deleteCurrentProject()" style="color:var(--red);border-color:var(--red)">🗑 Delete This Project 刪除此項目</button>
+      </div>
+    </div>
 
     <div class="kpi-grid">
       <div class="kpi-card" id="kpi-progress">
@@ -238,7 +261,7 @@
     <div class="card">
       <div class="card-header">
         <div class="left"><span class="step-badge">2</span> Task List 任務清單</div>
-        <span style="font-size:11px;opacity:0.85">Supervisor updates % / QS updates dates</span>
+        <button class="btn btn-outline btn-sm" onclick="addTask()" style="background:rgba(255,255,255,0.15);color:#fff;border-color:rgba(255,255,255,0.4)">+ Add Task 新增任務</button>
       </div>
       <div class="card-body">
         <div class="legend-strip">
@@ -257,6 +280,7 @@
               <th style="width:100px">Status</th>
               <th style="width:140px">Progress %</th>
               <th style="width:110px">Materials 材料</th>
+              <th style="width:40px"></th>
             </tr>
           </thead>
           <tbody id="task-body"></tbody>
@@ -312,8 +336,66 @@
       </div>
     </div>
 
+    <div class="card">
+      <div class="card-header">
+        <div class="left"><span class="step-badge">6</span> VO Records 追加工程記錄</div>
+        <button class="btn btn-outline btn-sm" onclick="openVoUploadModal()" style="background:rgba(255,255,255,0.15);color:#fff;border-color:rgba(255,255,255,0.4)">⬆️ Upload Old VO 上傳舊VO單</button>
+      </div>
+      <div class="card-body">
+        <p style="font-size:12.5px;color:var(--muted);margin-top:0">上傳過去已簽發的 VO（追加工程）單據，方便日後查閱此項目的所有變更記錄。也可以直接前往 <a href="vo.html">VO Request</a> 頁面製作新的 VO。</p>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>VO No. 編號</th>
+              <th>Date 日期</th>
+              <th>Description 說明</th>
+              <th style="width:110px;text-align:right">Amount (RM)</th>
+              <th style="width:180px">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="vo-list-body"></tbody>
+        </table>
+        <div id="vo-empty-state" style="display:none;text-align:center;color:var(--muted);padding:20px;font-size:12.5px">尚未上傳任何 VO 單據 / No VO records uploaded yet.</div>
+      </div>
+    </div>
+
   </div>
 
+</div>
+
+<!-- Upload Old VO Modal -->
+<div class="overlay" id="vo-upload-overlay" onclick="handleVoUploadOverlayClick(event)">
+  <div class="modal-sheet">
+    <h3 style="margin:0 0 4px;color:var(--navy);font-size:17px">⬆️ Upload Old VO 上傳舊VO單</h3>
+    <p style="margin:0 0 16px;font-size:12px;color:var(--muted)">上傳這個項目過去的 VO 單據（PDF 或圖片），不需要重新輸入項目明細。</p>
+    <div class="field-grid two">
+      <div class="field full">
+        <label>VO File (PDF / Image) VO檔案 *</label>
+        <input type="file" id="vo-up-file" accept=".pdf,image/*" onchange="handleVoUploadFileChange()">
+        <div id="vo-up-file-info" style="font-size:11px;color:var(--muted);margin-top:4px"></div>
+      </div>
+      <div class="field">
+        <label>VO No. 編號 *</label>
+        <input id="vo-up-ref" placeholder="e.g. VO-2025-003">
+      </div>
+      <div class="field">
+        <label>Date 日期</label>
+        <input type="date" id="vo-up-date">
+      </div>
+      <div class="field full">
+        <label>Description 說明</label>
+        <input id="vo-up-desc" placeholder="e.g. Additional waterproofing works">
+      </div>
+      <div class="field">
+        <label>Amount (RM) 金額</label>
+        <input type="number" id="vo-up-amount" min="0" step="0.01" placeholder="0.00">
+      </div>
+    </div>
+    <div class="add-bar" style="justify-content:flex-end;margin-top:16px">
+      <button class="btn btn-grey" onclick="closeVoUploadModal()">Cancel 取消</button>
+      <button class="btn btn-red" id="vo-up-save-btn" onclick="saveUploadedVo()">💾 Save 保存</button>
+    </div>
+  </div>
 </div>
 
 <!-- Preview Overlay -->
@@ -326,6 +408,52 @@
     <div id="preview-content"></div>
   </div>
 </div>
+
+<!-- New / Edit Project Modal -->
+<div class="overlay" id="project-modal-overlay" onclick="handleProjectModalOverlayClick(event)">
+  <div class="modal-sheet">
+    <h3 id="project-modal-title" style="margin:0 0 4px;color:var(--navy);font-size:17px">+ New Project 新增項目</h3>
+    <p style="margin:0 0 16px;font-size:12px;color:var(--muted)">直接建立一個新工程項目，之後可以在「Task List 任務清單」裡添加具體工作項目。</p>
+    <div class="field-grid two">
+      <div class="field">
+        <label>Project Ref / ID 項目編號 *</label>
+        <input id="pm-ref" placeholder="e.g. PRJ-001">
+      </div>
+      <div class="field">
+        <label>Project Type 項目類型</label>
+        <select id="pm-qtype">
+          <option value="residential">Residential 住宅類</option>
+          <option value="commercial">Commercial 商業類</option>
+        </select>
+      </div>
+      <div class="field full">
+        <label>Client Name 客戶姓名</label>
+        <input id="pm-client" placeholder="e.g. Mr Tan Wei Ming">
+      </div>
+      <div class="field full">
+        <label>Site Address 工地地址</label>
+        <input id="pm-address" placeholder="Site address 工地地址">
+      </div>
+      <div class="field full">
+        <label>Subject / Project Title 事由</label>
+        <input id="pm-subject" placeholder="e.g. Renovation works for...">
+      </div>
+      <div class="field">
+        <label>Project Start Date 開始日期</label>
+        <input type="date" id="pm-start">
+      </div>
+      <div class="field">
+        <label>Target Completion 目標完工</label>
+        <input type="date" id="pm-end">
+      </div>
+    </div>
+    <div class="add-bar" style="justify-content:flex-end;margin-top:16px">
+      <button class="btn btn-grey" onclick="closeProjectModal()">Cancel 取消</button>
+      <button class="btn btn-red" onclick="saveProjectModal()">💾 Save Project 保存項目</button>
+    </div>
+  </div>
+</div>
+
 
 <script>
 let currentProject = null; // the loaded schedule object
@@ -352,16 +480,28 @@ function fmtDateDisplay(s){
   return d.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
 }
 
-/* ---------- init: populate quotation dropdown ---------- */
+/* ---------- init: populate project/quotation dropdown ---------- */
 function populateQuotationSelect(){
   const sel = document.getElementById('quotation-select');
+  const prevValue = sel.value;
   const quotations = loadSavedQuotations();
-  if (quotations.length === 0){
-    sel.innerHTML = '<option value="">— No saved quotations yet —</option>';
+  const schedules = loadAllSchedules();
+  const quotedRefs = new Set(quotations.map(q => q.ref));
+
+  // Manually-created projects (exist in schedules but have no backing quotation)
+  const manualProjects = Object.values(schedules).filter(p => !quotedRefs.has(p.ref));
+
+  const options = [];
+  quotations.forEach(q => options.push({ ref: q.ref, label: `${q.ref} — ${q.client || 'No client name'} (RM ${fmt(q.grandTotal)})` }));
+  manualProjects.forEach(p => options.push({ ref: p.ref, label: `${p.ref} — ${p.client || 'No client name'} ${p.grandTotal ? '(RM ' + fmt(p.grandTotal) + ')' : '(manual project)'}` }));
+
+  if (options.length === 0){
+    sel.innerHTML = '<option value="">— No projects yet — click + New Project —</option>';
     return;
   }
-  sel.innerHTML = '<option value="">Select a quotation… 選擇報價單</option>' +
-    quotations.map(q => `<option value="${q.ref}">${q.ref} — ${q.client || 'No client name'} (RM ${fmt(q.grandTotal)})</option>`).join('');
+  sel.innerHTML = '<option value="">Select a project… 選擇項目</option>' +
+    options.map(o => `<option value="${o.ref}">${o.label}</option>`).join('');
+  if (prevValue && options.some(o => o.ref === prevValue)) sel.value = prevValue;
 }
 
 function loadSelectedProject(){
@@ -412,13 +552,127 @@ function loadSelectedProject(){
   document.getElementById('project-end').value = currentProject.projectEnd || '';
   document.getElementById('prev-claim-pct').value = currentProject.previousClaimPct || 0;
 
+  document.getElementById('ps-ref').textContent = currentProject.ref + (currentProject.subject ? ' — ' + currentProject.subject : '');
+  document.getElementById('ps-sub').textContent =
+    (currentProject.client ? '客戶 Client: ' + currentProject.client : '客戶 Client: —') +
+    '   ·   ' + (currentProject.address ? '地址 Address: ' + currentProject.address : '地址 Address: —');
+
   document.getElementById('no-project-state').style.display = 'none';
   document.getElementById('project-content').style.display = 'block';
 
   renderTasks();
+  renderVoList();
   renderUpcomingMaterials();
   renderOverview();
   updateClaimBox();
+}
+
+/* ---------- New / Edit Project modal ---------- */
+let projectModalMode = 'new'; // 'new' or 'edit'
+
+function openProjectModal(mode){
+  projectModalMode = mode;
+  const title = document.getElementById('project-modal-title');
+  const refInput = document.getElementById('pm-ref');
+
+  if (mode === 'edit' && currentProject){
+    title.textContent = '✏️ Edit Project Info 編輯項目資料';
+    refInput.value = currentProject.ref || '';
+    refInput.disabled = true; // ref is the key used to link records — keep it stable once created
+    document.getElementById('pm-client').value = currentProject.client || '';
+    document.getElementById('pm-address').value = currentProject.address || '';
+    document.getElementById('pm-subject').value = currentProject.subject || '';
+    document.getElementById('pm-qtype').value = currentProject.qType || 'residential';
+    document.getElementById('pm-start').value = currentProject.projectStart || '';
+    document.getElementById('pm-end').value = currentProject.projectEnd || '';
+  } else {
+    title.textContent = '+ New Project 新增項目';
+    refInput.disabled = false;
+    refInput.value = '';
+    document.getElementById('pm-client').value = '';
+    document.getElementById('pm-address').value = '';
+    document.getElementById('pm-subject').value = '';
+    document.getElementById('pm-qtype').value = 'residential';
+    document.getElementById('pm-start').value = '';
+    document.getElementById('pm-end').value = '';
+  }
+  document.getElementById('project-modal-overlay').classList.add('active');
+}
+
+function closeProjectModal(){
+  document.getElementById('project-modal-overlay').classList.remove('active');
+}
+
+function handleProjectModalOverlayClick(e){
+  if (e.target === document.getElementById('project-modal-overlay')) closeProjectModal();
+}
+
+function saveProjectModal(){
+  const ref = document.getElementById('pm-ref').value.trim();
+  if (!ref){
+    alert('Please enter a Project Ref / ID.\n請填寫項目編號。');
+    document.getElementById('pm-ref').focus();
+    return;
+  }
+  const client = document.getElementById('pm-client').value.trim();
+  const address = document.getElementById('pm-address').value.trim();
+  const subject = document.getElementById('pm-subject').value.trim();
+  const qType = document.getElementById('pm-qtype').value;
+  const start = document.getElementById('pm-start').value;
+  const end = document.getElementById('pm-end').value;
+
+  const schedules = loadAllSchedules();
+
+  if (projectModalMode === 'new'){
+    if (schedules[ref]){
+      alert('A project with this Ref / ID already exists.\n此項目編號已存在，請使用其他編號。');
+      return;
+    }
+    currentProject = {
+      ref, client, address, subject, qType,
+      grandTotal: 0,
+      projectStart: start,
+      projectEnd: end,
+      previousClaimPct: 0,
+      tasks: []
+    };
+  } else {
+    // edit mode — ref stays the same, update the rest
+    currentProject.client = client;
+    currentProject.address = address;
+    currentProject.subject = subject;
+    currentProject.qType = qType;
+    currentProject.projectStart = start;
+    currentProject.projectEnd = end;
+  }
+
+  saveSchedule(currentProject);
+  closeProjectModal();
+  populateQuotationSelect();
+  document.getElementById('quotation-select').value = currentProject.ref;
+  loadSelectedProject();
+}
+
+function deleteCurrentProject(){
+  if (!currentProject) return;
+  const ref = currentProject.ref;
+  const confirmText = 'Delete project "' + ref + '"?\n\nThis will permanently remove this project, all its tasks, and any uploaded VO records under it. This cannot be undone.\n\n確定要刪除項目 "' + ref + '" 嗎？\n這將永久移除此項目、所有任務，以及底下所有已上傳的VO記錄。此操作無法撤銷。';
+  if (!confirm(confirmText)) return;
+
+  const schedules = loadAllSchedules();
+  delete schedules[ref];
+  try {
+    localStorage.setItem('gal_project_schedules', JSON.stringify(schedules));
+  } catch(e) {
+    alert('Could not delete — please try again.\n刪除失敗，請重試。');
+    return;
+  }
+
+  currentProject = null;
+  populateQuotationSelect();
+  document.getElementById('quotation-select').value = '';
+  document.getElementById('project-content').style.display = 'none';
+  document.getElementById('no-project-state').style.display = 'block';
 }
 
 function onProjectDatesChange(){
@@ -470,9 +724,46 @@ function updateTaskField(id, field, val){
     t.status = val;
     if (val === 'completed') t.pct = 100;
     if (val === 'notstarted') t.pct = 0;
+  } else if (field === 'qty' || field === 'amount'){
+    t[field] = parseFloat(val) || 0;
   } else {
     t[field] = val;
   }
+  saveSchedule(currentProject);
+  renderTasks();
+  renderUpcomingMaterials();
+  renderOverview();
+  updateClaimBox();
+}
+
+function addTask(){
+  if (!currentProject) return;
+  const nextId = currentProject.tasks.length ? Math.max(...currentProject.tasks.map(t => t.id)) + 1 : 1;
+  currentProject.tasks.push({
+    id: nextId,
+    desc: 'New Task 新任務',
+    cat: 'Custom / Other 自定義項目',
+    unit: 'lot',
+    qty: 1,
+    rate: 0,
+    amount: 0,
+    plannedStart: '',
+    plannedEnd: '',
+    status: 'notstarted',
+    pct: 0,
+    materials: []
+  });
+  saveSchedule(currentProject);
+  renderTasks();
+  renderUpcomingMaterials();
+  renderOverview();
+  updateClaimBox();
+}
+
+function removeTask(id){
+  if (!currentProject) return;
+  if (!confirm('Delete this task? 確定要刪除此任務嗎？\nThis cannot be undone. 此操作無法撤銷。')) return;
+  currentProject.tasks = currentProject.tasks.filter(t => t.id !== id);
   saveSchedule(currentProject);
   renderTasks();
   renderUpcomingMaterials();
@@ -485,7 +776,7 @@ let expandedMaterialTaskId = null;
 function renderTasks(){
   const body = document.getElementById('task-body');
   if (!currentProject || currentProject.tasks.length === 0){
-    body.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#999;padding:18px">No tasks.</td></tr>';
+    body.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#999;padding:18px">No tasks yet. Click "+ Add Task 新增任務" above to add one.</td></tr>';
     return;
   }
   // group by category for readability
@@ -498,13 +789,13 @@ function renderTasks(){
 
   let html = '';
   Object.entries(byCat).forEach(([cat, tasks]) => {
-    html += `<tr class="cat-row"><td colspan="8">${cat}</td></tr>`;
+    html += `<tr class="cat-row"><td colspan="9">${cat}</td></tr>`;
     tasks.forEach(t => {
       html += `
         <tr>
-          <td>${t.desc}</td>
-          <td>${t.qty} ${t.unit}</td>
-          <td>RM ${fmt(t.amount)}</td>
+          <td><input type="text" value="${(t.desc||'').replace(/"/g,'&quot;')}" oninput="updateTaskField(${t.id},'desc',this.value)" style="min-width:160px"></td>
+          <td><input type="number" min="0" step="0.01" value="${t.qty}" style="width:56px" onchange="updateTaskField(${t.id},'qty',this.value)"> ${t.unit||''}</td>
+          <td><input type="number" min="0" step="0.01" value="${t.amount}" style="width:80px" onchange="updateTaskField(${t.id},'amount',this.value)"></td>
           <td><input type="date" value="${t.plannedStart}" onchange="updateTaskField(${t.id},'plannedStart',this.value)"></td>
           <td><input type="date" value="${t.plannedEnd}" onchange="updateTaskField(${t.id},'plannedEnd',this.value)"></td>
           <td>
@@ -519,6 +810,7 @@ function renderTasks(){
             <input type="number" min="0" max="100" step="5" value="${t.pct}" style="width:52px;display:inline-block" onchange="updateTaskField(${t.id},'pct',this.value)">%
           </td>
           <td><button class="mat-btn" onclick="toggleMaterials(${t.id})">📦 ${t.materials.length} item${t.materials.length===1?'':'s'}</button></td>
+          <td><button class="btn-icon-del" title="Delete task 刪除任務" onclick="removeTask(${t.id})">🗑</button></td>
         </tr>
         ${expandedMaterialTaskId === t.id ? renderMaterialEditorRow(t) : ''}`;
     });
@@ -529,7 +821,7 @@ function renderTasks(){
 function renderMaterialEditorRow(t){
   return `
     <tr class="mat-row">
-      <td colspan="8">
+      <td colspan="9">
         <div class="mat-editor">
           <table>
             <thead><tr><th style="width:45%">Material 材料</th><th style="width:20%">Qty 數量</th><th style="width:20%">Unit 單位</th><th style="width:15%"></th></tr></thead>
@@ -760,6 +1052,151 @@ function markAsClaimed(){
   saveSchedule(currentProject);
   updateClaimBox();
   alert('Marked ' + ov.weightedPct.toFixed(1) + '% as claimed. Next claim will be calculated from here.\n已標記 ' + ov.weightedPct.toFixed(1) + '% 為已請款，下次請款將以此為基準計算。');
+}
+
+/* ---------- VO records (per-project uploaded VO documents) ---------- */
+let uploadedVoFileData = null; // { name, type, dataUrl, size }
+
+function fmtVoDate(s){
+  if (!s) return '—';
+  const d = new Date(s + 'T00:00:00');
+  if (isNaN(d.getTime())) return s;
+  return d.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+}
+
+function renderVoList(){
+  const body = document.getElementById('vo-list-body');
+  const emptyState = document.getElementById('vo-empty-state');
+  if (!body) return;
+  const records = (currentProject && currentProject.voRecords) ? currentProject.voRecords : [];
+  if (records.length === 0){
+    body.innerHTML = '';
+    emptyState.style.display = 'block';
+    return;
+  }
+  emptyState.style.display = 'none';
+  body.innerHTML = records.slice().sort((a,b) => new Date(b.date||0) - new Date(a.date||0)).map(v => `
+    <tr>
+      <td><b>${v.ref}</b></td>
+      <td>${fmtVoDate(v.date)}</td>
+      <td>${v.desc || '—'}</td>
+      <td style="text-align:right">${v.amount ? fmt(v.amount) : '—'}</td>
+      <td>
+        <button class="mat-btn" onclick="viewVoFile('${v.id}')">📄 View 查看</button>
+        <button class="mat-btn" onclick="deleteVoRecord('${v.id}')" style="color:var(--red);background:#FDECEA;border-color:#F5C6C0">🗑</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function openVoUploadModal(){
+  if (!currentProject){ alert('Please select or create a project first.\n請先選擇或建立一個項目。'); return; }
+  document.getElementById('vo-up-file').value = '';
+  document.getElementById('vo-up-file-info').textContent = '';
+  document.getElementById('vo-up-ref').value = '';
+  document.getElementById('vo-up-date').value = '';
+  document.getElementById('vo-up-desc').value = '';
+  document.getElementById('vo-up-amount').value = '';
+  uploadedVoFileData = null;
+  document.getElementById('vo-upload-overlay').classList.add('active');
+}
+
+function closeVoUploadModal(){
+  document.getElementById('vo-upload-overlay').classList.remove('active');
+}
+
+function handleVoUploadOverlayClick(e){
+  if (e.target === document.getElementById('vo-upload-overlay')) closeVoUploadModal();
+}
+
+function handleVoUploadFileChange(){
+  const fileInput = document.getElementById('vo-up-file');
+  const infoEl = document.getElementById('vo-up-file-info');
+  const file = fileInput.files[0];
+  if (!file) { uploadedVoFileData = null; infoEl.textContent = ''; return; }
+
+  const maxSizeBytes = 3 * 1024 * 1024; // soft cap — total localStorage is usually only ~5-10MB
+  if (file.size > maxSizeBytes){
+    infoEl.innerHTML = '<span style="color:var(--red)">⚠ File is ' + (file.size/1024/1024).toFixed(1) + 'MB — please keep under 3MB, device storage is limited.<br>檔案過大，請壓縮後再上傳（建議小於 3MB）。</span>';
+    fileInput.value = '';
+    uploadedVoFileData = null;
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = function(e){
+    uploadedVoFileData = { name: file.name, type: file.type, dataUrl: e.target.result, size: file.size };
+    infoEl.innerHTML = '<span style="color:#1a7d3a">✓ ' + file.name + ' (' + (file.size/1024).toFixed(0) + ' KB)</span>';
+  };
+  reader.onerror = function(){
+    infoEl.innerHTML = '<span style="color:var(--red)">Could not read file. 讀取檔案失敗。</span>';
+    uploadedVoFileData = null;
+  };
+  reader.readAsDataURL(file);
+}
+
+function saveUploadedVo(){
+  if (!currentProject) return;
+  const ref = document.getElementById('vo-up-ref').value.trim();
+  if (!ref){
+    alert('Please enter a VO No.\n請填寫VO編號。');
+    document.getElementById('vo-up-ref').focus();
+    return;
+  }
+  if (!uploadedVoFileData){
+    alert('Please choose a file to upload.\n請選擇要上傳的檔案。');
+    return;
+  }
+  const date = document.getElementById('vo-up-date').value;
+  const desc = document.getElementById('vo-up-desc').value.trim();
+  const amount = parseFloat(document.getElementById('vo-up-amount').value) || 0;
+
+  if (!currentProject.voRecords) currentProject.voRecords = [];
+  currentProject.voRecords.push({
+    id: 'vo_' + Date.now() + '_' + Math.round(Math.random()*1000),
+    ref, date, desc, amount,
+    fileName: uploadedVoFileData.name,
+    fileType: uploadedVoFileData.type,
+    fileData: uploadedVoFileData.dataUrl,
+    uploadedAt: new Date().toISOString()
+  });
+
+  try {
+    saveSchedule(currentProject);
+  } catch(e) {
+    alert('Could not save — device storage may be full. Try a smaller file, or delete some old records first.\n保存失敗，本機存儲空間可能已滿。');
+    currentProject.voRecords.pop();
+    return;
+  }
+
+  closeVoUploadModal();
+  renderVoList();
+}
+
+function viewVoFile(voId){
+  if (!currentProject || !currentProject.voRecords) return;
+  const v = currentProject.voRecords.find(x => x.id === voId);
+  if (!v || !v.fileData){ alert('File not found. 找不到檔案。'); return; }
+  const w = window.open();
+  if (!w){
+    alert('Pop-up was blocked! Please allow pop-ups to view the file.\n彈出視窗被阻止，請允許彈出視窗以查看檔案。');
+    return;
+  }
+  const safeTitle = (v.ref || 'VO').replace(/</g,'&lt;');
+  if ((v.fileType || '').indexOf('pdf') !== -1 || (v.fileName||'').toLowerCase().endsWith('.pdf')){
+    w.document.write('<!DOCTYPE html><html><head><title>' + safeTitle + '</title></head><body style="margin:0"><iframe src="' + v.fileData + '" style="width:100%;height:100vh;border:none"></iframe></body></html>');
+  } else {
+    w.document.write('<!DOCTYPE html><html><head><title>' + safeTitle + '</title></head><body style="margin:0;background:#222;display:flex;align-items:center;justify-content:center;min-height:100vh"><img src="' + v.fileData + '" style="max-width:100%;max-height:100vh"></body></html>');
+  }
+  w.document.close();
+}
+
+function deleteVoRecord(voId){
+  if (!currentProject || !currentProject.voRecords) return;
+  if (!confirm('Delete this VO record? This cannot be undone.\n確定要刪除此VO記錄嗎？此操作無法撤銷。')) return;
+  currentProject.voRecords = currentProject.voRecords.filter(x => x.id !== voId);
+  saveSchedule(currentProject);
+  renderVoList();
 }
 
 /* ---------- weekly progress report ---------- */
