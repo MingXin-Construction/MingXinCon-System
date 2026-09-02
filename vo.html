@@ -190,12 +190,7 @@
         </div>
         <div class="field">
           <label>Project / Site 工地</label>
-          <select id="vo-site">
-            <option>Taman Desa Setia — Terrace Renovation</option>
-            <option>Bukit Tinggi Suites — Commercial Fit-out</option>
-            <option>Klang Warehouse Ext. — Phase 2</option>
-            <option>Other 其他</option>
-          </select>
+          <select id="vo-site"></select>
         </div>
         <div class="field">
           <label>Requested By 记录人 (Supervisor)</label>
@@ -347,7 +342,24 @@ function genVoNumber(){
   return 'VO-' + ymd + '-' + rand;
 }
 
+/* Site/project list is pulled live from the shared project registry
+   (created via Quotation save/upload or Schedule's "+ New Project") instead
+   of a hardcoded sample list. */
+function populateVoSiteSelect(){
+  let schedules = {};
+  try { schedules = JSON.parse(localStorage.getItem('gal_project_schedules') || '{}'); } catch(e){ schedules = {}; }
+  const refs = Object.keys(schedules);
+  const sel = document.getElementById('vo-site');
+  const options = refs.map(ref => {
+    const p = schedules[ref];
+    const label = p.subject ? (ref + ' — ' + p.subject) : (p.client ? (ref + ' — ' + p.client) : ref);
+    return `<option value="${ref}">${label}</option>`;
+  }).join('');
+  sel.innerHTML = (refs.length === 0 ? '<option value="">— No projects yet — 還沒有項目 —</option>' : options) + '<option value="Other 其他">Other 其他</option>';
+}
+
 function init(){
+  populateVoSiteSelect();
   document.getElementById('vo-number').value = genVoNumber();
   document.getElementById('vo-date').value = new Date().toISOString().slice(0,10);
   addRow();

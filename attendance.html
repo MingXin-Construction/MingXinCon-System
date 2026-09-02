@@ -214,12 +214,7 @@
         </div>
         <div class="field">
           <label>Project / Site 工地</label>
-          <select id="att-site" onchange="loadAttendanceForm()">
-            <option>Taman Desa Setia — Terrace Renovation</option>
-            <option>Bukit Tinggi Suites — Commercial Fit-out</option>
-            <option>Klang Warehouse Ext. — Phase 2</option>
-            <option>Other 其他</option>
-          </select>
+          <select id="att-site" onchange="loadAttendanceForm()"></select>
         </div>
         <div class="field">
           <label>Recorded By 记录人</label>
@@ -281,10 +276,6 @@
           <label>Site (optional filter) 工地筛选</label>
           <select id="summary-site">
             <option value="all">All Sites 全部工地</option>
-            <option>Taman Desa Setia — Terrace Renovation</option>
-            <option>Bukit Tinggi Suites — Commercial Fit-out</option>
-            <option>Klang Warehouse Ext. — Phase 2</option>
-            <option>Other 其他</option>
           </select>
         </div>
         <div class="field" style="display:flex;align-items:flex-end">
@@ -314,12 +305,37 @@
 </div>
 
 <script>
-const SITES = [
-  "Taman Desa Setia — Terrace Renovation",
-  "Bukit Tinggi Suites — Commercial Fit-out",
-  "Klang Warehouse Ext. — Phase 2",
-  "Other 其他"
-];
+/* Site/project list is now pulled live from the shared project registry
+   (created via Quotation save/upload or Schedule's "+ New Project") instead
+   of a hardcoded sample list, so every real project shows up here automatically. */
+function loadProjectSiteOptions(){
+  let schedules = {};
+  try { schedules = JSON.parse(localStorage.getItem('gal_project_schedules') || '{}'); } catch(e){ schedules = {}; }
+  return Object.keys(schedules).map(ref => {
+    const p = schedules[ref];
+    const label = p.subject ? (ref + ' — ' + p.subject) : (p.client ? (ref + ' — ' + p.client) : ref);
+    return { value: ref, label };
+  });
+}
+
+function populateSiteSelects(){
+  const projects = loadProjectSiteOptions();
+  const attSel = document.getElementById('att-site');
+  const prevAtt = attSel.value;
+  if (projects.length === 0){
+    attSel.innerHTML = '<option value="">— No projects yet — 還沒有項目 —</option><option value="Other 其他">Other 其他</option>';
+  } else {
+    attSel.innerHTML = projects.map(p => `<option value="${p.value}">${p.label}</option>`).join('') + '<option value="Other 其他">Other 其他</option>';
+    if (projects.some(p => p.value === prevAtt) || prevAtt === 'Other 其他') attSel.value = prevAtt;
+  }
+
+  const sumSel = document.getElementById('summary-site');
+  const prevSum = sumSel.value;
+  sumSel.innerHTML = '<option value="all">All Sites 全部工地</option>' +
+    projects.map(p => `<option value="${p.value}">${p.label}</option>`).join('') +
+    '<option value="Other 其他">Other 其他</option>';
+  if (projects.some(p => p.value === prevSum) || prevSum === 'all' || prevSum === 'Other 其他') sumSel.value = prevSum;
+}
 
 let workers = [];
 let workerSeq = 1;
@@ -783,6 +799,7 @@ function handleOverlayClick(e){ if (e.target === document.getElementById('overla
 function init(){
   loadWorkers();
   renderWorkers();
+  populateSiteSelects();
   document.getElementById('att-date').value = new Date().toISOString().slice(0,10);
   const now = new Date();
   document.getElementById('summary-month').value = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');

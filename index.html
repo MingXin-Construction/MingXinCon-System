@@ -776,6 +776,44 @@ function showPreview() {
 function closePreview() { document.getElementById('overlay').classList.remove('active'); }
 function handleOverlayClick(e) { if (e.target === document.getElementById('overlay')) closePreview(); }
 
+/* ===================== SYNC QUOTATIONS -> PROJECT REGISTRY ===================== */
+/* Ensures every saved/uploaded quotation immediately becomes a real project that
+   Schedule, VO, Attendance, Daily Report, and KPI pages can all reference — instead
+   of only appearing after someone happens to open Schedule and select it there. */
+function upsertProjectFromQuotation(q, itemsAsTasks){
+  let schedules = {};
+  try { schedules = JSON.parse(localStorage.getItem('gal_project_schedules') || '{}'); } catch(e){ schedules = {}; }
+
+  if (schedules[q.ref]){
+    // Project already exists (maybe already customized in Schedule) —
+    // just keep its identity fields in sync, don't touch tasks/dates/VO records.
+    schedules[q.ref].client = q.client;
+    schedules[q.ref].address = q.address;
+    schedules[q.ref].subject = q.subject;
+    schedules[q.ref].qType = q.qType;
+    schedules[q.ref].grandTotal = q.grandTotal;
+  } else {
+    schedules[q.ref] = {
+      ref: q.ref,
+      client: q.client,
+      address: q.address,
+      subject: q.subject,
+      qType: q.qType,
+      grandTotal: q.grandTotal,
+      projectStart: '',
+      projectEnd: '',
+      previousClaimPct: 0,
+      tasks: itemsAsTasks || [],
+      voRecords: []
+    };
+  }
+  try {
+    localStorage.setItem('gal_project_schedules', JSON.stringify(schedules));
+  } catch(e) {
+    // Non-fatal — the quotation itself already saved successfully either way.
+  }
+}
+
 function saveToSchedule() {
   if (rows.length === 0) {
     alert('Please add at least one item before saving.\n請至少添加一項工程項目後再保存。');
@@ -821,6 +859,22 @@ function saveToSchedule() {
     alert('Could not save — device storage may be full.\n保存失敗，本機存儲空間可能已滿。');
     return;
   }
+
+  const itemsAsTasks = items.map((item, idx) => ({
+    id: idx + 1,
+    desc: item.desc,
+    cat: item.cat,
+    unit: item.unit,
+    qty: item.qty,
+    rate: item.rate,
+    amount: item.amount,
+    plannedStart: '',
+    plannedEnd: '',
+    status: 'notstarted',
+    pct: 0,
+    materials: []
+  }));
+  upsertProjectFromQuotation(project, itemsAsTasks);
 
   if (confirm('Quotation "' + ref + '" saved. Open Project Schedule now to build the progress schedule?\n報價單 "' + ref + '" 已保存。是否現在打開進度表頁面建立工程進度？')) {
     window.location.href = 'schedule.html';
@@ -1016,7 +1070,7 @@ function saveUploadedQuotation(){
   }
   saved = saved.filter(p => p.ref !== ref);
 
-  saved.push({
+  const newRecord = {
     ref, client, address: subject, subject, date,
     qType: 'residential',
     items: [],
@@ -1026,7 +1080,8 @@ function saveUploadedQuotation(){
     fileName: uploadedFileData.name,
     fileType: uploadedFileData.type,
     fileData: uploadedFileData.dataUrl
-  });
+  };
+  saved.push(newRecord);
 
   try {
     localStorage.setItem('gal_saved_quotations', JSON.stringify(saved));
@@ -1034,6 +1089,8 @@ function saveUploadedQuotation(){
     alert('Could not save — device storage may be full. Try a smaller file, or delete some old saved quotations first.\n保存失敗，本機存儲空間可能已滿。請嘗試更小的檔案，或先刪除一些舊的報價單記錄。');
     return;
   }
+
+  upsertProjectFromQuotation(newRecord, []);
 
   closeUploadModal();
   openArchive();

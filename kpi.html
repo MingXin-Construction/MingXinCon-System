@@ -167,12 +167,7 @@
         </div>
         <div class="field">
           <label>Project / Site 工地</label>
-          <select id="kpi-site" onchange="loadWeekForm()">
-            <option>Taman Desa Setia — Terrace Renovation</option>
-            <option>Bukit Tinggi Suites — Commercial Fit-out</option>
-            <option>Klang Warehouse Ext. — Phase 2</option>
-            <option>Other 其他</option>
-          </select>
+          <select id="kpi-site" onchange="loadWeekForm()"></select>
         </div>
         <div class="field">
           <label>Scored By 评分人</label>
@@ -277,6 +272,24 @@ const QUALITY_ITEMS = [
   "Passed QS/consultant inspection this week 本周通过QS/顾问检查",
   "Previous week's defect list has been closed out 上周缺陷清单已跟进完成"
 ];
+
+/* Site/project list is pulled live from the shared project registry
+   (created via Quotation save/upload or Schedule's "+ New Project") instead
+   of a hardcoded sample list. */
+function populateSiteSelect(){
+  let schedules = {};
+  try { schedules = JSON.parse(localStorage.getItem('gal_project_schedules') || '{}'); } catch(e){ schedules = {}; }
+  const refs = Object.keys(schedules);
+  const sel = document.getElementById('kpi-site');
+  const prev = sel.value;
+  const options = refs.map(ref => {
+    const p = schedules[ref];
+    const label = p.subject ? (ref + ' — ' + p.subject) : (p.client ? (ref + ' — ' + p.client) : ref);
+    return `<option value="${ref}">${label}</option>`;
+  }).join('');
+  sel.innerHTML = (refs.length === 0 ? '<option value="">— No projects yet — 還沒有項目 —</option>' : options) + '<option value="Other 其他">Other 其他</option>';
+  if (refs.some(r => r === prev) || prev === 'Other 其他') sel.value = prev;
+}
 
 function scoreClass(score){
   if (score >= 80) return 'good';
@@ -449,6 +462,7 @@ function mondayOfThisWeek(){
 }
 
 function init(){
+  populateSiteSelect();
   document.getElementById('kpi-week').value = mondayOfThisWeek();
   loadWeekForm();
 }
