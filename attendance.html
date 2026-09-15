@@ -179,9 +179,10 @@
   <div class="card">
     <div class="card-header">
       <div class="left"><span class="step-badge">1</span> Worker Directory 员工名单 <span class="role-tag">🔒 HR / Account</span></div>
-      <span style="font-size:11px;opacity:0.85">Saved on this device 保存在本机</span>
+      <button class="btn btn-outline btn-sm" onclick="recalculateAllWages()" style="background:rgba(255,255,255,0.15);color:#fff;border-color:rgba(255,255,255,0.4)">🔄 Recalculate All Wages 重新計算所有工資</button>
     </div>
     <div class="card-body">
+      <p style="font-size:12px;color:var(--muted);margin-top:0">改了工人的薪率後，<b>之前已保存的出勤記錄不會自動更新工資</b>（工資是保存當天就算好存起來的）。改完薪率後點上面這顆按鈕，會用最新薪率重新計算所有歷史記錄的工資。</p>
       <table class="data-table">
         <thead>
           <tr>
@@ -436,6 +437,41 @@ function calcWage(status, hours, ot, rateType, rate){
     const base = status === 'Absent' ? 0 : hours * rate;
     return base + ot * rate * 1.5;
   }
+}
+
+function recalculateAllWages(){
+  const all = loadAllAttendance();
+  if (all.length === 0){
+    alert('No saved attendance records yet.\n目前還沒有已保存的出勤記錄。');
+    return;
+  }
+  if (!confirm(
+    'This will recalculate the wage on EVERY saved attendance record using each worker\'s CURRENT rate in the Worker Directory above — including old dates.\n\n' +
+    'Only use this after fixing a wrong rate that was entered by mistake. If a rate change is a genuine pay raise that should only apply going forward, do NOT use this (it will also change past days).\n\n' +
+    '這會用「員工名單」裡目前的最新薪率，重新計算所有已保存出勤記錄的工資（包括很久以前的記錄）。\n\n' +
+    '只有在薪率本身是填錯需要更正時才用這個功能。如果是加薪、只想影響之後的記錄，請不要使用（會連舊記錄也一起改）。\n\n' +
+    'Continue? 確定要繼續嗎？'
+  )) return;
+
+  let updated = 0, skippedNoWorker = 0;
+  all.forEach(r => {
+    const w = workers.find(w => w.id === r.workerId);
+    if (!w){ skippedNoWorker++; return; }
+    r.rateType = w.rateType;
+    r.rate = w.rate;
+    r.name = w.name;
+    r.role = w.role;
+    r.icNo = w.icNo;
+    r.wage = calcWage(r.status, r.hours, r.ot, w.rateType, w.rate);
+    updated++;
+  });
+
+  saveAllAttendance(all);
+  renderEntryRows(); // refresh today's on-screen totals if a day is currently loaded
+  alert(
+    'Done. ' + updated + ' record(s) recalculated' + (skippedNoWorker > 0 ? ', ' + skippedNoWorker + ' skipped (worker no longer in directory)' : '') + '.\n' +
+    '完成，已重新計算 ' + updated + ' 筆記錄' + (skippedNoWorker > 0 ? '，' + skippedNoWorker + ' 筆跳過（員工已不在名單中）' : '') + '。'
+  );
 }
 function fmt(n){ return Number(n||0).toLocaleString('en-MY', { minimumFractionDigits:2, maximumFractionDigits:2 }); }
 
