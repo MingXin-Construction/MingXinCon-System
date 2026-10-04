@@ -182,7 +182,7 @@
       <button class="btn btn-outline btn-sm" onclick="recalculateAllWages()" style="background:rgba(255,255,255,0.15);color:#fff;border-color:rgba(255,255,255,0.4)">🔄 Recalculate All Wages 重新計算所有工資</button>
     </div>
     <div class="card-body">
-      <p style="font-size:12px;color:var(--muted);margin-top:0">每位員工同時記錄「時薪」和「日薪」（填其中一個，另一個會自動按 8 小時換算，也可手動改成實際日薪）；「Pay Basis 計薪方式」決定工資用哪一個計算（Hourly＝時薪×工時，Daily＝日薪）。另外，改了工人的薪率後，<b>之前已保存的出勤記錄不會自動更新工資</b>（工資是保存當天就算好存起來的）。改完薪率後點上面這顆按鈕，會用最新薪率重新計算所有歷史記錄的工資。</p>
+      <p style="font-size:12px;color:var(--muted);margin-top:0">每位員工同時記錄「時薪」和「日薪」。<b>日薪只是記錄、讓大家知道，不會影響工資</b>（因為有人一天做 8 小時、有人 9 小時），改了月結汇总就會直接顯示新數字。工資由「Pay Basis 計薪方式」決定：Hourly＝時薪×工時（建議都用這個）；若選 Daily，則日薪才是計薪基準。另外，改了計薪用的薪率後，<b>之前已保存的出勤記錄不會自動更新工資</b>（工資是保存當天就算好存起來的）。改完薪率後點上面這顆按鈕，會用最新薪率重新計算所有歷史記錄的工資。</p>
       <table class="data-table">
         <thead>
           <tr>
@@ -422,12 +422,10 @@ function updateWorker(id, field, val){
   if (!w) return;
   if (field === 'hourlyRate'){
     const nv = parseFloat(val) || 0;
-    const linked = w.rateType === 'Hourly' && Math.abs((w.dayRate||0) - r2((w.hourlyRate||0)*8)) < 0.011; // only the pay-basis rate drives the other one
-    w.hourlyRate = nv;
-    if (linked){ w.dayRate = r2(nv*8); const el = document.getElementById('wk-'+id+'-dayRate'); if (el) el.value = w.dayRate; }
+    w.hourlyRate = nv; // Rate per Day is a separate record (some workers do 8h/day, some 9h) — never auto-changed
   } else if (field === 'dayRate'){
     const nv = parseFloat(val) || 0;
-    const linked = w.rateType === 'Daily' && Math.abs((w.hourlyRate||0) - r2((w.dayRate||0)/8)) < 0.011; // only the pay-basis rate drives the other one
+    const linked = w.rateType === 'Daily' && Math.abs((w.hourlyRate||0) - r2((w.dayRate||0)/8)) < 0.011; // only Daily-basis workers: day rate is their pay basis
     w.dayRate = nv;
     if (linked){ w.hourlyRate = r2(nv/8); const el = document.getElementById('wk-'+id+'-hourlyRate'); if (el) el.value = w.hourlyRate; }
   } else if (field === 'rate'){
@@ -478,20 +476,9 @@ function calcWage(status, hours, ot, rateType, rate){
   }
 }
 
-function recalculateAllWages(){
+/* silent core: refresh every saved record with each worker's CURRENT directory rates */
+function applyRecalculation(){
   const all = loadAllAttendance();
-  if (all.length === 0){
-    alert('No saved attendance records yet.\n目前還沒有已保存的出勤記錄。');
-    return;
-  }
-  if (!confirm(
-    'This will recalculate the wage on EVERY saved attendance record using each worker\'s CURRENT rate in the Worker Directory above — including old dates.\n\n' +
-    'Only use this after fixing a wrong rate that was entered by mistake. If a rate change is a genuine pay raise that should only apply going forward, do NOT use this (it will also change past days).\n\n' +
-    '這會用「員工名單」裡目前的最新薪率，重新計算所有已保存出勤記錄的工資（包括很久以前的記錄）。\n\n' +
-    '只有在薪率本身是填錯需要更正時才用這個功能。如果是加薪、只想影響之後的記錄，請不要使用（會連舊記錄也一起改）。\n\n' +
-    'Continue? 確定要繼續嗎？'
-  )) return;
-
   let updated = 0, skippedNoWorker = 0;
   all.forEach(r => {
     const w = workers.find(w => w.id === r.workerId);
@@ -506,9 +493,37 @@ function recalculateAllWages(){
     r.wage = calcWage(r.status, r.hours, r.ot, w.rateType, w.rate);
     updated++;
   });
-
   saveAllAttendance(all);
-  renderEntryRows(); // refresh today's on-screen totals if a day is currently loaded
+  renderEntryRows(); // refresh on-screen totals if a day is currently loaded
+  return { updated, skippedNoWorker };
+}
+
+/* from the monthly summary: refresh saved records with current rates, then rebuild the summary */
+function recalcFromSummary(skipConfirm){
+  if (!skipConfirm && !confirm(
+    '用「員工名單」目前的薪率，重新計算所有已保存出勤記錄（包括以前的日子），然後更新這份月結汇总。\n\n' +
+    'Recalculate ALL saved records with the current Worker Directory rates (including past dates), then refresh this summary. Continue?'
+  )) return false;
+  applyRecalculation();
+  generateSummary();
+  return true;
+}
+
+function recalculateAllWages(){
+  const all = loadAllAttendance();
+  if (all.length === 0){
+    alert('No saved attendance records yet.\n目前還沒有已保存的出勤記錄。');
+    return;
+  }
+  if (!confirm(
+    'This will recalculate the wage on EVERY saved attendance record using each worker\'s CURRENT rate in the Worker Directory above — including old dates.\n\n' +
+    'Only use this after fixing a wrong rate that was entered by mistake. If a rate change is a genuine pay raise that should only apply going forward, do NOT use this (it will also change past days).\n\n' +
+    '這會用「員工名單」裡目前的最新薪率，重新計算所有已保存出勤記錄的工資（包括很久以前的記錄）。\n\n' +
+    '只有在薪率本身是填錯需要更正時才用這個功能。如果是加薪、只想影響之後的記錄，請不要使用（會連舊記錄也一起改）。\n\n' +
+    'Continue? 確定要繼續嗎？'
+  )) return;
+
+  const { updated, skippedNoWorker } = applyRecalculation();
   alert(
     'Done. ' + updated + ' record(s) recalculated' + (skippedNoWorker > 0 ? ', ' + skippedNoWorker + ' skipped (worker no longer in directory)' : '') + '.\n' +
     '完成，已重新計算 ' + updated + ' 筆記錄' + (skippedNoWorker > 0 ? '，' + skippedNoWorker + ' 筆跳過（員工已不在名單中）' : '') + '。'
@@ -768,7 +783,7 @@ function generateSummary(){
   const byWorker = {};
   all.forEach(r => {
     if (!byWorker[r.workerId]) byWorker[r.workerId] = {
-      name:r.name, role:r.role, icNo:r.icNo, sites:new Set(), days:0, hours:0, ot:0, wage:0, hr:0, day:0, lastDate:"", rateKeys:new Set()
+      name:r.name, role:r.role, icNo:r.icNo, sites:new Set(), days:0, hours:0, ot:0, wage:0, wid:r.workerId, hr:0, day:0, lastDate:"", recRate:0, recType:"", rateKeys:new Set(), stale:false
     };
     const b = byWorker[r.workerId];
     if (r.status !== 'Absent') b.days++;
@@ -778,9 +793,19 @@ function generateSummary(){
     b.sites.add(r.site);
     const rr = recRates(r);
     b.rateKeys.add(rr.hr + "|" + rr.day);
-    if ((r.date || "") >= b.lastDate){ b.lastDate = r.date || ""; b.hr = rr.hr; b.day = rr.day; }
+    if ((r.date || "") >= b.lastDate){ b.lastDate = r.date || ""; b.hr = rr.hr; b.day = rr.day; b.recRate = r.rate; b.recType = r.rateType; }
   });
   const workerRows = Object.values(byWorker).sort((a,b) => (a.name||'').localeCompare(b.name||''));
+  // show the rates currently in the Worker Directory; flag rows whose saved wages were calculated with different rates
+  workerRows.forEach(b => {
+    const cur = workers.find(w => w.id === b.wid);
+    if (cur){
+      b.stale = cur.rateType !== b.recType || r2(cur.rate) !== r2(b.recRate); // only the rate that actually drives wages matters; Rate per Day is info-only for Hourly workers
+      b.hr = cur.hourlyRate;
+      b.day = cur.dayRate;
+    }
+  });
+  const anyStale = workerRows.some(b => b.stale);
 
   if (workerRows.length === 0){
     output.innerHTML = '<div class="empty-msg">No attendance records found for this month/site. 该月份/工地暂无出勤记录。</div>';
@@ -813,8 +838,8 @@ function generateSummary(){
             <td>${w.name||'(unnamed)'} <span style="color:#999;font-size:11px">${w.role?('· '+w.role):''}</span></td>
             <td>${w.icNo||'—'}</td>
             <td style="font-size:11px;color:#555">${Array.from(w.sites).join(', ')}</td>
-            <td>RM ${fmt(w.hr)}${w.rateKeys.size>1 ? ' *' : ''}</td>
-            <td>RM ${fmt(w.day)}${w.rateKeys.size>1 ? ' *' : ''}</td>
+            <td>RM ${fmt(w.hr)}${w.rateKeys.size>1 ? ' *' : ''}${w.stale ? ' ⚠' : ''}</td>
+            <td>RM ${fmt(w.day)}${w.rateKeys.size>1 ? ' *' : ''}${w.stale ? ' ⚠' : ''}</td>
             <td>${w.days}</td>
             <td>${fmt(w.hours)}</td>
             <td>${fmt(w.ot)}</td>
@@ -823,6 +848,7 @@ function generateSummary(){
         `).join('')}
       </tbody>
     </table>
+    ${anyStale ? '<div style="margin-top:8px;padding:8px 12px;background:#FFF3CD;border:1px solid #F0D58A;border-radius:6px;font-size:12px;color:#7a5a00">⚠ 標示 ⚠ 的員工：名單裡「計薪用」的薪率已改，但已保存出勤記錄的工資還是用舊薪率算的（只改日薪記錄不會出現這個提示）。 <button class="btn btn-outline btn-sm" style="margin-left:8px" onclick="recalcFromSummary()">🔄 Recalculate &amp; Refresh 重新計算並更新</button></div>' : ''}
     ${workerRows.some(w => w.rateKeys.size > 1) ? '<div style="font-size:11px;color:#a15c00;margin-top:8px">* 該員工本月薪率有變動，這裡顯示本月最新一天的時薪／日薪。 Rate changed during this month — latest rate shown.</div>' : ''}
     <div class="grand-total-box">
       <div class="gt-item"><div class="gt-label">Total Hours 总工时</div><div class="gt-value">${fmt(grandHours)}</div></div>
@@ -843,6 +869,11 @@ function monthLabel(m){
 
 function showSummaryPreview(){
   if (!lastSummaryData) return;
+  if (lastSummaryData.workerRows.some(w => w.stale)){
+    if (confirm('有員工計薪用的薪率已修改，但已保存記錄的工資還是舊薪率。要先重新計算再打印嗎？\nA pay rate was changed but saved wages still use the old rate. Recalculate before printing?')){
+      recalcFromSummary(true);
+    }
+  }
   const { month, siteFilter, workerRows, grandHours, grandWage } = lastSummaryData;
 
   document.getElementById('preview-content').innerHTML = `
@@ -861,7 +892,7 @@ function showSummaryPreview(){
         </tr>
       </thead>
       <tbody>
-        ${workerRows.map(w => `<tr><td>${w.name||'(unnamed)'} ${w.role?('· '+w.role):''}</td><td>${w.icNo||'—'}</td><td style="font-size:11px">${Array.from(w.sites).join(', ')}</td><td>${fmt(w.hr)}${w.rateKeys.size>1?' *':''}</td><td>${fmt(w.day)}${w.rateKeys.size>1?' *':''}</td><td>${w.days}</td><td>${fmt(w.hours)}</td><td>${fmt(w.ot)}</td><td>${fmt(w.wage)}</td></tr>`).join('')}
+        ${workerRows.map(w => `<tr><td>${w.name||'(unnamed)'} ${w.role?('· '+w.role):''}</td><td>${w.icNo||'—'}</td><td style="font-size:11px">${Array.from(w.sites).join(', ')}</td><td>${fmt(w.hr)}${w.rateKeys.size>1?' *':''}${w.stale?' ⚠':''}</td><td>${fmt(w.day)}${w.rateKeys.size>1?' *':''}${w.stale?' ⚠':''}</td><td>${w.days}</td><td>${fmt(w.hours)}</td><td>${fmt(w.ot)}</td><td>${fmt(w.wage)}</td></tr>`).join('')}
       </tbody>
     </table>
     ${workerRows.some(w => w.rateKeys.size > 1) ? '<div style="font-size:10px;color:#777;margin-top:6px">* Rate changed during this month — latest rate shown. 本月薪率有變動，顯示最新薪率。</div>' : ''}
