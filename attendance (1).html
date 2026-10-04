@@ -179,17 +179,19 @@
   <div class="card">
     <div class="card-header">
       <div class="left"><span class="step-badge">1</span> Worker Directory 员工名单 <span class="role-tag">🔒 HR / Account</span></div>
-      <span style="font-size:11px;opacity:0.85">Saved on this device 保存在本机</span>
+      <button class="btn btn-outline btn-sm" onclick="recalculateAllWages()" style="background:rgba(255,255,255,0.15);color:#fff;border-color:rgba(255,255,255,0.4)">🔄 Recalculate All Wages 重新計算所有工資</button>
     </div>
     <div class="card-body">
+      <p style="font-size:12px;color:var(--muted);margin-top:0">每位員工同時記錄「時薪」和「日薪」（填其中一個，另一個會自動按 8 小時換算，也可手動改成實際日薪）；「Pay Basis 計薪方式」決定工資用哪一個計算（Hourly＝時薪×工時，Daily＝日薪）。另外，改了工人的薪率後，<b>之前已保存的出勤記錄不會自動更新工資</b>（工資是保存當天就算好存起來的）。改完薪率後點上面這顆按鈕，會用最新薪率重新計算所有歷史記錄的工資。</p>
       <table class="data-table">
         <thead>
           <tr>
             <th>Name 姓名</th>
             <th style="width:140px">Role 职位</th>
             <th style="width:170px">IC / Passport No.</th>
-            <th style="width:110px">Rate Type 计薪方式</th>
-            <th style="width:110px">Rate (RM) 薪率</th>
+            <th style="width:110px">Pay Basis 计薪方式</th>
+            <th style="width:120px">Hourly Rate 时薪 (RM/hr)</th>
+            <th style="width:120px">Rate per Day 日薪 (RM/day)</th>
             <th style="width:36px"></th>
           </tr>
         </thead>
@@ -214,12 +216,7 @@
         </div>
         <div class="field">
           <label>Project / Site 工地</label>
-          <select id="att-site" onchange="loadAttendanceForm()">
-            <option>Taman Desa Setia — Terrace Renovation</option>
-            <option>Bukit Tinggi Suites — Commercial Fit-out</option>
-            <option>Klang Warehouse Ext. — Phase 2</option>
-            <option>Other 其他</option>
-          </select>
+          <select id="att-site" onchange="loadAttendanceForm()"></select>
         </div>
         <div class="field">
           <label>Recorded By 记录人</label>
@@ -281,10 +278,6 @@
           <label>Site (optional filter) 工地筛选</label>
           <select id="summary-site">
             <option value="all">All Sites 全部工地</option>
-            <option>Taman Desa Setia — Terrace Renovation</option>
-            <option>Bukit Tinggi Suites — Commercial Fit-out</option>
-            <option>Klang Warehouse Ext. — Phase 2</option>
-            <option>Other 其他</option>
           </select>
         </div>
         <div class="field" style="display:flex;align-items:flex-end">
@@ -314,21 +307,68 @@
 </div>
 
 <script>
-const SITES = [
-  "Taman Desa Setia — Terrace Renovation",
-  "Bukit Tinggi Suites — Commercial Fit-out",
-  "Klang Warehouse Ext. — Phase 2",
-  "Other 其他"
-];
+/* Site/project list is now pulled live from the shared project registry
+   (created via Quotation save/upload or Schedule's "+ New Project") instead
+   of a hardcoded sample list, so every real project shows up here automatically. */
+function loadProjectSiteOptions(){
+  let schedules = {};
+  try { schedules = JSON.parse(localStorage.getItem('gal_project_schedules') || '{}'); } catch(e){ schedules = {}; }
+  return Object.keys(schedules).map(ref => {
+    const p = schedules[ref];
+    const label = p.subject ? (ref + ' — ' + p.subject) : (p.client ? (ref + ' — ' + p.client) : ref);
+    return { value: ref, label };
+  });
+}
+
+function populateSiteSelects(){
+  const projects = loadProjectSiteOptions();
+  const attSel = document.getElementById('att-site');
+  const prevAtt = attSel.value;
+  if (projects.length === 0){
+    attSel.innerHTML = '<option value="">— No projects yet — 還沒有項目 —</option><option value="Other 其他">Other 其他</option>';
+  } else {
+    attSel.innerHTML = projects.map(p => `<option value="${p.value}">${p.label}</option>`).join('') + '<option value="Other 其他">Other 其他</option>';
+    if (projects.some(p => p.value === prevAtt) || prevAtt === 'Other 其他') attSel.value = prevAtt;
+  }
+
+  const sumSel = document.getElementById('summary-site');
+  const prevSum = sumSel.value;
+  sumSel.innerHTML = '<option value="all">All Sites 全部工地</option>' +
+    projects.map(p => `<option value="${p.value}">${p.label}</option>`).join('') +
+    '<option value="Other 其他">Other 其他</option>';
+  if (projects.some(p => p.value === prevSum) || prevSum === 'all' || prevSum === 'Other 其他') sumSel.value = prevSum;
+}
 
 let workers = [];
 let workerSeq = 1;
 let lastSummaryData = null;
 
 /* ---------- storage helpers ---------- */
+/* ---------- rate helpers: every worker keeps BOTH an hourly rate and a per-day rate ---------- */
+function r2(n){ return Math.round((parseFloat(n)||0)*100)/100; }
+function syncBasisRate(w){
+  // "rate" is the figure wages are calculated from (kept for backward compatibility)
+  w.rate = (w.rateType === 'Hourly') ? (parseFloat(w.hourlyRate)||0) : (parseFloat(w.dayRate)||0);
+}
+function normalizeWorker(w){
+  if (w.hourlyRate == null || w.dayRate == null){
+    const r = parseFloat(w.rate) || 0;
+    if (w.rateType === 'Hourly'){ w.hourlyRate = r; w.dayRate = r2(r*8); }
+    else { w.dayRate = r; w.hourlyRate = r2(r/8); }
+  }
+  syncBasisRate(w);
+}
+// hourly + daily rate for a saved attendance record (older records only stored one rate)
+function recRates(r){
+  if (r.hourlyRate != null && r.dayRate != null) return { hr: r.hourlyRate, day: r.dayRate };
+  const rate = parseFloat(r.rate) || 0;
+  return r.rateType === 'Hourly' ? { hr: rate, day: r2(rate*8) } : { hr: r2(rate/8), day: rate };
+}
+
 function loadWorkers(){
   try { workers = JSON.parse(localStorage.getItem('gal_workers') || '[]'); } catch(e){ workers = []; }
   workerSeq = workers.reduce((m,w) => Math.max(m, w.id+1), 1);
+  workers.forEach(normalizeWorker);
 }
 function saveWorkers(){
   try { localStorage.setItem('gal_workers', JSON.stringify(workers)); } catch(e){}
@@ -364,7 +404,7 @@ function getPhotosForCurrentEntry(){
 
 /* ---------- worker directory ---------- */
 function addWorker(){
-  workers.push({ id: workerSeq++, name:'', role:'', icNo:'', rateType:'Daily', rate:0 });
+  workers.push({ id: workerSeq++, name:'', role:'', icNo:'', rateType:'Hourly', rate:0, hourlyRate:0, dayRate:0 });
   saveWorkers();
   renderWorkers();
   populateAddWorkerSelect();
@@ -380,14 +420,29 @@ function deleteWorker(id){
 function updateWorker(id, field, val){
   const w = workers.find(w => w.id === id);
   if (!w) return;
-  w[field] = (field === 'rate') ? (parseFloat(val) || 0) : val;
+  if (field === 'hourlyRate'){
+    const nv = parseFloat(val) || 0;
+    const linked = w.rateType === 'Hourly' && Math.abs((w.dayRate||0) - r2((w.hourlyRate||0)*8)) < 0.011; // only the pay-basis rate drives the other one
+    w.hourlyRate = nv;
+    if (linked){ w.dayRate = r2(nv*8); const el = document.getElementById('wk-'+id+'-dayRate'); if (el) el.value = w.dayRate; }
+  } else if (field === 'dayRate'){
+    const nv = parseFloat(val) || 0;
+    const linked = w.rateType === 'Daily' && Math.abs((w.hourlyRate||0) - r2((w.dayRate||0)/8)) < 0.011; // only the pay-basis rate drives the other one
+    w.dayRate = nv;
+    if (linked){ w.hourlyRate = r2(nv/8); const el = document.getElementById('wk-'+id+'-hourlyRate'); if (el) el.value = w.hourlyRate; }
+  } else if (field === 'rate'){
+    w.rate = parseFloat(val) || 0;
+  } else {
+    w[field] = val;
+  }
+  syncBasisRate(w);
   saveWorkers();
   if (field === 'name' || field === 'role') { populateAddWorkerSelect(); loadAttendanceForm(); }
 }
 function renderWorkers(){
   const body = document.getElementById('worker-body');
   if (workers.length === 0){
-    body.innerHTML = '<tr><td colspan="6" class="empty-msg">No workers yet — click "Add Worker" to build your worker list 暂无员工，请点击上方添加</td></tr>';
+    body.innerHTML = '<tr><td colspan="7" class="empty-msg">No workers yet — click "Add Worker" to build your worker list 暂无员工，请点击上方添加</td></tr>';
     return;
   }
   body.innerHTML = workers.map(w => `
@@ -401,7 +456,8 @@ function renderWorkers(){
           <option ${w.rateType==='Hourly'?'selected':''}>Hourly</option>
         </select>
       </td>
-      <td><input class="num-input" style="width:90px !important" type="number" min="0" step="0.5" value="${w.rate}" oninput="updateWorker(${w.id},'rate',this.value)"></td>
+      <td><input id="wk-${w.id}-hourlyRate" class="num-input" style="width:90px !important" type="number" min="0" step="0.01" value="${w.hourlyRate}" oninput="updateWorker(${w.id},'hourlyRate',this.value)"></td>
+      <td><input id="wk-${w.id}-dayRate" class="num-input" style="width:90px !important" type="number" min="0" step="0.01" value="${w.dayRate}" oninput="updateWorker(${w.id},'dayRate',this.value)"></td>
       <td><button class="del-btn" onclick="deleteWorker(${w.id})">🗑</button></td>
     </tr>
   `).join('');
@@ -420,6 +476,43 @@ function calcWage(status, hours, ot, rateType, rate){
     const base = status === 'Absent' ? 0 : hours * rate;
     return base + ot * rate * 1.5;
   }
+}
+
+function recalculateAllWages(){
+  const all = loadAllAttendance();
+  if (all.length === 0){
+    alert('No saved attendance records yet.\n目前還沒有已保存的出勤記錄。');
+    return;
+  }
+  if (!confirm(
+    'This will recalculate the wage on EVERY saved attendance record using each worker\'s CURRENT rate in the Worker Directory above — including old dates.\n\n' +
+    'Only use this after fixing a wrong rate that was entered by mistake. If a rate change is a genuine pay raise that should only apply going forward, do NOT use this (it will also change past days).\n\n' +
+    '這會用「員工名單」裡目前的最新薪率，重新計算所有已保存出勤記錄的工資（包括很久以前的記錄）。\n\n' +
+    '只有在薪率本身是填錯需要更正時才用這個功能。如果是加薪、只想影響之後的記錄，請不要使用（會連舊記錄也一起改）。\n\n' +
+    'Continue? 確定要繼續嗎？'
+  )) return;
+
+  let updated = 0, skippedNoWorker = 0;
+  all.forEach(r => {
+    const w = workers.find(w => w.id === r.workerId);
+    if (!w){ skippedNoWorker++; return; }
+    r.rateType = w.rateType;
+    r.rate = w.rate;
+    r.hourlyRate = w.hourlyRate;
+    r.dayRate = w.dayRate;
+    r.name = w.name;
+    r.role = w.role;
+    r.icNo = w.icNo;
+    r.wage = calcWage(r.status, r.hours, r.ot, w.rateType, w.rate);
+    updated++;
+  });
+
+  saveAllAttendance(all);
+  renderEntryRows(); // refresh today's on-screen totals if a day is currently loaded
+  alert(
+    'Done. ' + updated + ' record(s) recalculated' + (skippedNoWorker > 0 ? ', ' + skippedNoWorker + ' skipped (worker no longer in directory)' : '') + '.\n' +
+    '完成，已重新計算 ' + updated + ' 筆記錄' + (skippedNoWorker > 0 ? '，' + skippedNoWorker + ' 筆跳過（員工已不在名單中）' : '') + '。'
+  );
 }
 function fmt(n){ return Number(n||0).toLocaleString('en-MY', { minimumFractionDigits:2, maximumFractionDigits:2 }); }
 
@@ -483,7 +576,7 @@ function renderEntryRows(){
     const w = workers.find(w => w.id === r.workerId) || { name:'(removed worker)', role:'' };
     return `
     <tr data-worker-id="${r.workerId}">
-      <td>${w.name || '(unnamed)'} <span style="color:#999;font-size:11px">${w.role?('· '+w.role):''}</span></td>
+      <td>${w.name || '(unnamed)'} <span style="color:#999;font-size:11px">${w.role?('· '+w.role):''}</span>${w.hourlyRate != null ? `<div style="color:#888;font-size:11px;margin-top:2px">RM ${fmt(w.hourlyRate)}/hr · RM ${fmt(w.dayRate)}/day</div>` : ''}</td>
       <td>
         <select class="status-select" onchange="onAttRowChange(${r.workerId})">
           <option value="Present" ${r.status==='Present'?'selected':''}>Present</option>
@@ -542,7 +635,7 @@ function saveAttendance(){
     const wage = calcWage(r.status, r.hours, r.ot, w.rateType, w.rate);
     all.push({
       date, site, workerId: r.workerId, name: w.name, role: w.role, icNo: w.icNo,
-      rateType: w.rateType, rate: w.rate, status: r.status, hours: r.hours, ot: r.ot, wage
+      rateType: w.rateType, rate: w.rate, hourlyRate: w.hourlyRate, dayRate: w.dayRate, status: r.status, hours: r.hours, ot: r.ot, wage
     });
   });
 
@@ -675,7 +768,7 @@ function generateSummary(){
   const byWorker = {};
   all.forEach(r => {
     if (!byWorker[r.workerId]) byWorker[r.workerId] = {
-      name:r.name, role:r.role, icNo:r.icNo, sites:new Set(), days:0, hours:0, ot:0, wage:0
+      name:r.name, role:r.role, icNo:r.icNo, sites:new Set(), days:0, hours:0, ot:0, wage:0, hr:0, day:0, lastDate:"", rateKeys:new Set()
     };
     const b = byWorker[r.workerId];
     if (r.status !== 'Absent') b.days++;
@@ -683,6 +776,9 @@ function generateSummary(){
     b.ot += r.ot;
     b.wage += r.wage;
     b.sites.add(r.site);
+    const rr = recRates(r);
+    b.rateKeys.add(rr.hr + "|" + rr.day);
+    if ((r.date || "") >= b.lastDate){ b.lastDate = r.date || ""; b.hr = rr.hr; b.day = rr.day; }
   });
   const workerRows = Object.values(byWorker).sort((a,b) => (a.name||'').localeCompare(b.name||''));
 
@@ -703,6 +799,8 @@ function generateSummary(){
           <th>Worker 员工</th>
           <th style="width:120px">IC/Passport</th>
           <th style="width:160px">Site(s) 工地</th>
+          <th style="width:100px">Hourly Rate 时薪</th>
+          <th style="width:100px">Rate / Day 日薪</th>
           <th style="width:70px">Days</th>
           <th style="width:80px">Hours</th>
           <th style="width:70px">OT Hrs</th>
@@ -715,6 +813,8 @@ function generateSummary(){
             <td>${w.name||'(unnamed)'} <span style="color:#999;font-size:11px">${w.role?('· '+w.role):''}</span></td>
             <td>${w.icNo||'—'}</td>
             <td style="font-size:11px;color:#555">${Array.from(w.sites).join(', ')}</td>
+            <td>RM ${fmt(w.hr)}${w.rateKeys.size>1 ? ' *' : ''}</td>
+            <td>RM ${fmt(w.day)}${w.rateKeys.size>1 ? ' *' : ''}</td>
             <td>${w.days}</td>
             <td>${fmt(w.hours)}</td>
             <td>${fmt(w.ot)}</td>
@@ -723,6 +823,7 @@ function generateSummary(){
         `).join('')}
       </tbody>
     </table>
+    ${workerRows.some(w => w.rateKeys.size > 1) ? '<div style="font-size:11px;color:#a15c00;margin-top:8px">* 該員工本月薪率有變動，這裡顯示本月最新一天的時薪／日薪。 Rate changed during this month — latest rate shown.</div>' : ''}
     <div class="grand-total-box">
       <div class="gt-item"><div class="gt-label">Total Hours 总工时</div><div class="gt-value">${fmt(grandHours)}</div></div>
       <div class="gt-item"><div class="gt-label">Total Wages 总工钱</div><div class="gt-value">RM ${fmt(grandWage)}</div></div>
@@ -755,14 +856,15 @@ function showSummaryPreview(){
     <table class="pr-table">
       <thead>
         <tr>
-          <th>Worker</th><th style="width:110px">IC/Passport</th><th style="width:140px">Site(s)</th>
+          <th>Worker</th><th style="width:100px">IC/Passport</th><th style="width:120px">Site(s)</th><th style="width:80px">Hourly Rate</th><th style="width:80px">Rate / Day</th>
           <th style="width:60px">Days</th><th style="width:70px">Hours</th><th style="width:60px">OT Hrs</th><th style="width:100px">Wage (RM)</th>
         </tr>
       </thead>
       <tbody>
-        ${workerRows.map(w => `<tr><td>${w.name||'(unnamed)'} ${w.role?('· '+w.role):''}</td><td>${w.icNo||'—'}</td><td style="font-size:11px">${Array.from(w.sites).join(', ')}</td><td>${w.days}</td><td>${fmt(w.hours)}</td><td>${fmt(w.ot)}</td><td>${fmt(w.wage)}</td></tr>`).join('')}
+        ${workerRows.map(w => `<tr><td>${w.name||'(unnamed)'} ${w.role?('· '+w.role):''}</td><td>${w.icNo||'—'}</td><td style="font-size:11px">${Array.from(w.sites).join(', ')}</td><td>${fmt(w.hr)}${w.rateKeys.size>1?' *':''}</td><td>${fmt(w.day)}${w.rateKeys.size>1?' *':''}</td><td>${w.days}</td><td>${fmt(w.hours)}</td><td>${fmt(w.ot)}</td><td>${fmt(w.wage)}</td></tr>`).join('')}
       </tbody>
     </table>
+    ${workerRows.some(w => w.rateKeys.size > 1) ? '<div style="font-size:10px;color:#777;margin-top:6px">* Rate changed during this month — latest rate shown. 本月薪率有變動，顯示最新薪率。</div>' : ''}
     <div style="display:flex;justify-content:flex-end;margin-top:8px">
       <div style="font-size:15px;font-weight:800;color:#1F3A5F;border-top:2px solid #1F3A5F;padding-top:6px;min-width:280px;text-align:right">
         Grand Total 总计: ${fmt(grandHours)} hrs · RM ${fmt(grandWage)}
@@ -783,6 +885,7 @@ function handleOverlayClick(e){ if (e.target === document.getElementById('overla
 function init(){
   loadWorkers();
   renderWorkers();
+  populateSiteSelects();
   document.getElementById('att-date').value = new Date().toISOString().slice(0,10);
   const now = new Date();
   document.getElementById('summary-month').value = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
