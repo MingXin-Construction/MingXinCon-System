@@ -137,10 +137,17 @@
   table.pr-table tr.pr-subtotal td{ background:var(--lightblue); font-weight:700; color:var(--navy); border-top:1px solid var(--navy); }
 
   @media print{
-    body *{ visibility:hidden; }
-    .preview-sheet, .preview-sheet *{ visibility:visible; }
-    .preview-sheet{ position:absolute; top:0; left:0; width:100%; padding:15mm; }
-    .preview-toolbar{ display:none; }
+    @page{ size:A4; margin:12mm; }
+    * { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
+    /* hide everything except the open preview, and let the preview flow across as many pages as it needs */
+    body > *:not(.overlay){ display:none !important; }
+    .overlay:not(.active){ display:none !important; }
+    .overlay.active{ display:block !important; position:static !important; inset:auto !important; background:none !important; padding:0 !important; overflow:visible !important; }
+    .preview-sheet{ position:static !important; width:100% !important; max-width:none !important; padding:0 !important; border-radius:0 !important; box-shadow:none !important; }
+    .preview-toolbar{ display:none !important; }
+    table{ page-break-inside:auto; }
+    thead{ display:table-header-group; }
+    tr{ page-break-inside:avoid; }
   }
   @media (max-width:900px){
     .field-grid, .field-grid.three{ grid-template-columns:1fr 1fr; }
@@ -884,15 +891,15 @@ function showSummaryPreview(){
         <div class="pr-sub">${monthLabel(month)}${siteFilter !== 'all' ? ' · ' + siteFilter : ' · All Sites'}</div>
       </div>
     </div>
-    <table class="pr-table">
+    <table class="pr-table" style="table-layout:fixed">
       <thead>
         <tr>
-          <th>Worker</th><th style="width:100px">IC/Passport</th><th style="width:120px">Site(s)</th><th style="width:80px">Hourly Rate</th><th style="width:80px">Rate / Day</th>
-          <th style="width:60px">Days</th><th style="width:70px">Hours</th><th style="width:60px">OT Hrs</th><th style="width:100px">Wage (RM)</th>
+          <th style="width:22%">Worker</th><th style="width:11%">IC/Passport</th><th style="width:13%">Site(s)</th><th style="width:9%">Hourly Rate</th><th style="width:10%">Rate / Day</th>
+          <th style="width:6%">Days</th><th style="width:8%">Hours</th><th style="width:7%">OT Hrs</th><th style="width:14%">Wage (RM)</th>
         </tr>
       </thead>
       <tbody>
-        ${workerRows.map(w => `<tr><td>${w.name||'(unnamed)'} ${w.role?('· '+w.role):''}</td><td>${w.icNo||'—'}</td><td style="font-size:11px">${Array.from(w.sites).join(', ')}</td><td>${fmt(w.hr)}${w.rateKeys.size>1?' *':''}${w.stale?' ⚠':''}</td><td>${fmt(w.day)}${w.rateKeys.size>1?' *':''}${w.stale?' ⚠':''}</td><td>${w.days}</td><td>${fmt(w.hours)}</td><td>${fmt(w.ot)}</td><td>${fmt(w.wage)}</td></tr>`).join('')}
+        ${workerRows.map(w => `<tr><td>${w.name||'(unnamed)'}${w.role?'<div style="font-size:10px;color:#888">'+w.role+'</div>':''}</td><td>${w.icNo||'—'}</td><td style="font-size:11px">${Array.from(w.sites).join(', ')}</td><td>${fmt(w.hr)}${w.rateKeys.size>1?' *':''}${w.stale?' ⚠':''}</td><td>${fmt(w.day)}${w.rateKeys.size>1?' *':''}${w.stale?' ⚠':''}</td><td>${w.days}</td><td>${fmt(w.hours)}</td><td>${fmt(w.ot)}</td><td>${fmt(w.wage)}</td></tr>`).join('')}
       </tbody>
     </table>
     ${workerRows.some(w => w.rateKeys.size > 1) ? '<div style="font-size:10px;color:#777;margin-top:6px">* Rate changed during this month — latest rate shown. 本月薪率有變動，顯示最新薪率。</div>' : ''}
